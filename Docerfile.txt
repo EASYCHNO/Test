@@ -1,8 +1,12 @@
 # Используем базовый образ Node.js
 FROM node:14
 
-# Устанавливаем LibreOffice
-RUN apt-get update && apt-get install -y libreoffice
+# Устанавливаем необходимые пакеты, включая LibreOffice
+RUN apt-get update && apt-get install -y \
+  libreoffice \
+  libsm6 \
+  libxext6 \
+  libxrender-dev
 
 # Создаем рабочую директорию
 WORKDIR /usr/src/app

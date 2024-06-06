@@ -36,14 +36,13 @@ app.use(express.json());
 
 const upload = multer({ storage: storage }); // Загруженные файлы будут сохраняться в папку 'uploads/'
 
-// Конвертация файла в PDF
 const convertToPdf = (inputPath, outputPath) => {
   const file = fs.readFileSync(inputPath);
   libre.convert(file, '.pdf', undefined, (err, done) => {
     if (err) {
       console.log(`Ошибка конвертации файла: ${err}`);
       return;
-    } 
+    }
     fs.writeFileSync(outputPath, done);
   });
 };
@@ -70,6 +69,7 @@ app.post('/upload', upload.single('file'), (req, res) => {
     res.send('Файл загружен и конвертирован в PDF.');
   }
 });
+
 
 
 /*const storage = multer.diskStorage({
