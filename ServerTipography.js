@@ -6,7 +6,8 @@ const multer = require('multer');
 const fs = require('fs');
 const path = require('path');
 const bodyParser = require('body-parser');
-const libre = require('libreoffice-convert');
+const CloudConvert = require('cloudconvert');
+const cloudConvert = new CloudConvert('eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9.eyJhdWQiOiIxIiwianRpIjoiOTlmNzlmNmI3Y2ZjOWYzMWNiMzkyM2M5ZTIyYjAwMDdlYTdmOGQ5Yzk5YzZjYjM5YjM3MzM4MDc0OWFiOGUwMmYyYzEzZmM4ZGY0ZWFhOGUiLCJpYXQiOjE3MTc2NjkzNDguNDc4MTQxLCJuYmYiOjE3MTc2NjkzNDguNDc4MTQzLCJleHAiOjQ4NzMzNDI5NDguNDcxODk2LCJzdWIiOiI2ODYyNDEyMCIsInNjb3BlcyI6WyJ1c2VyLnJlYWQiLCJ1c2VyLndyaXRlIiwidGFzay5yZWFkIiwidGFzay53cml0ZSIsIndlYmhvb2sucmVhZCIsIndlYmhvb2sud3JpdGUiLCJwcmVzZXQucmVhZCIsInByZXNldC53cml0ZSJdfQ.KnyPi_lCsK9Xqp7VVLn-_L52gi9iS-56TVvda-ZOZ40ps18p9f5Va4UN6z_ffJhtWsblzuDl83jsqQwPHv34wcoGTSewaGMJJEyG8Ugq9_gSE_s6YKX-acSNBxDluuhEHTXjwHlHCxzDT-bG3_07QZUIF-3rXbPyxpl6DsA-oCYXrZpptxzbCe-ps4a4Pm2uoZLbloCSrqoBmEmKrGqpTUau-q5JmGhNUgA7eSHaZBNEUycdtNbkWiJdUUUtOV_x-DNqWg6cqfbOyqGloAP-lIh5Y8Wsv5gh4gvqVlfvmT3UJWajuujINbbI3Ikh07x2XxyJ1NEsWmoTLnHhP-eyuILqNNZEC7Z_t92HsVsI9m5oCsWIVuVcq8Af9YnHhqnH6Wn6CtawtbK-xMe8NZLj6TAdlkBkCp1j10iOhCcf8GhwWa7xe1JwIDar6qP_VZdilMAbNk0W-s9qgOqgvoDHvWPJ472SEHdZd7ITMdlwUi5ZopVnd7Oi8QFPGnW3dIVx7o-ecp8JPDBiaVwP8sgslmHPTGjUMLygPEWtogJnt9dnGiESoi-1KJHLRTWofdfZeicMVFQ0MSVxOL8skhNZes1BFjbEYVx2Gpuc-nI57fDoCk36vaoIEnoyQl7UEkvExLCGravPsrIKK02waxNvWirCWKwZlJrjCsM7vMqko7g');
 
 const app = express();
 const PORT = 3000;
@@ -36,18 +37,58 @@ app.use(express.json());
 const upload = multer({ storage: storage }); // Загруженные файлы будут сохраняться в папку 'uploads/'
 
 // Конвертация файла в PDF
-const convertToPdf = (inputPath, outputPath) => {
-  const file = fs.readFileSync(inputPath);
-  libre.convert(file, '.pdf', undefined, (err, done) => {
-    if (err) {
-      console.log(`Ошибка конвертации файла: ${err}`);
-    } else {
-      fs.writeFileSync(outputPath, done);
-    }
-  });
+const convertToPdf = async (inputPath, outputPath) => {
+  const inputFile = fs.createReadStream(inputPath);
+  const outputFile = fs.createWriteStream(outputPath);
+
+  try {
+    const conversion = await cloudConvert.jobs.create({
+      tasks: {
+        'import-my-file': {
+          operation: 'import/upload'
+        },
+        'convert-my-file': {
+          operation: 'convert',
+          input: 'import-my-file',
+          output_format: 'pdf'
+        },
+        'export-my-file': {
+          operation: 'export/url',
+          input: 'convert-my-file'
+        }
+      }
+    });
+
+    const uploadTask = conversion.tasks.filter(
+      task => task.name === 'import-my-file'
+    )[0];
+
+    const fileUpload = await cloudConvert.tasks.upload(uploadTask, inputFile);
+
+    const exportTask = conversion.tasks.filter(
+      task => task.name === 'export-my-file'
+    )[0];
+
+    const downloadURL = exportTask.result.files[0].url;
+
+    await new Promise((resolve, reject) => {
+      const file = fs.createWriteStream(outputPath);
+      const request = require('https').get(downloadURL, function(response) {
+        response.pipe(file);
+        file.on('finish', function() {
+          file.close(resolve);
+        });
+      }).on('error', function(err) {
+        fs.unlink(outputPath);
+        reject(err.message);
+      });
+    });
+  } catch (error) {
+    console.log(`Ошибка конвертации файла: ${error}`);
+  }
 };
 
-app.post('/upload', upload.single('file'), (req, res) => {
+app.post('/upload', upload.single('file'), async (req, res) => {
   const file = req.file;
   if (!file) {
     return res.status(400).send('Файл не загружен');
@@ -65,7 +106,7 @@ app.post('/upload', upload.single('file'), (req, res) => {
   if (ext === '.pdf') {
     res.send('Файл загружен и сохранён без изменений.');
   } else {
-    convertToPdf(file.path, outputFilePath);
+    await convertToPdf(file.path, outputFilePath);
     res.send('Файл загружен и конвертирован в PDF.');
   }
 });
