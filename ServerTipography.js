@@ -7,6 +7,7 @@ const fs = require('fs');
 const path = require('path');
 const bodyParser = require('body-parser');
 const libre = require('libreoffice-convert');
+const { exec } = require('child_process');
 
 
 const app = express();
@@ -36,6 +37,20 @@ app.use(express.json());
 
 const upload = multer({ storage: storage }); // Загруженные файлы будут сохраняться в папку 'uploads/'
 
+// Проверка наличия soffice
+exec('which soffice', (error, stdout, stderr) => {
+  if (error) {
+    console.error(`Ошибка: ${error.message}`);
+    return;
+  }
+  if (stderr) {
+    console.error(`stderr: ${stderr}`);
+    return;
+  }
+  console.log(`soffice binary path: ${stdout}`);
+});
+
+// Конвертация файла в PDF
 const convertToPdf = (inputPath, outputPath) => {
   const file = fs.readFileSync(inputPath);
   libre.convert(file, '.pdf', undefined, (err, done) => {
@@ -69,6 +84,7 @@ app.post('/upload', upload.single('file'), (req, res) => {
     res.send('Файл загружен и конвертирован в PDF.');
   }
 });
+
 
 
 

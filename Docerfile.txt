@@ -6,10 +6,11 @@ RUN apt-get update && apt-get install -y \
   libreoffice \
   libsm6 \
   libxext6 \
-  libxrender-dev
+  libxrender-dev \
+  && apt-get clean
 
-# Проверка установки LibreOffice
-RUN which soffice
+# Убедимся, что LibreOffice установлена и бинарник soffice доступен
+RUN which soffice && soffice --version
 
 # Создаем рабочую директорию
 WORKDIR /usr/src/app
