@@ -8,6 +8,9 @@ RUN apt-get update && apt-get install -y \
   libxext6 \
   libxrender-dev
 
+# Проверка установки LibreOffice
+RUN which soffice
+
 # Создаем рабочую директорию
 WORKDIR /usr/src/app
 
