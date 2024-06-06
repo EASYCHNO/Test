@@ -9,6 +9,7 @@ const bodyParser = require('body-parser');
 
 const app = express();
 const PORT = 3000;
+app.use(bodyParser.json());
 
 // Подключение к базе данных SQLite
 const db = new sqlite3.Database('./Test.db', (err) => {
@@ -22,18 +23,19 @@ const db = new sqlite3.Database('./Test.db', (err) => {
 // Middleware для парсинга JSON
 app.use(express.json());
 
-//const upload = multer({ dest: 'uploads/' }); // Загруженные файлы будут сохраняться в папку 'uploads/'
 
-const storage = multer.diskStorage({
+const upload = multer({ dest: 'uploads/' }); // Загруженные файлы будут сохраняться в папку 'uploads/'
+
+/*const storage = multer.diskStorage({
   destination: function (req, file, cb) {
     cb(null, 'uploads/');
   },
   filename: function (req, file, cb) {
     cb(null, Date.now() + '-' + file.originalname); // Генерируем уникальное имя файла
   }
-});
+});*/
 
-const upload = multer({ storage: storage });
+//const upload = multer({ storage: storage });
 
 // Получение списка заказов с файлами
 app.get('/orderswithfiles', (req, res) => {
@@ -99,71 +101,62 @@ db.get(sql, [fileId], (err, row) => {
 });
 });
 
-// Конечная точка для авторизации
-app.post('/login', (req, res) => {
-const { login, password } = req.body;
-const sql = 'SELECT * FROM Users WHERE Login = ?';
+// Endpoint для регистрации пользователя
+app.post('/users/register', (req, res) => {
+  const { surname, name, lastname, email, login, password, roleID } = req.body;
 
-db.get(sql, [login], (err, row) => {
-  if (err) {
-    console.error('Ошибка при выполнении запроса:', err.message);
-    res.status(500).json({ error: 'Внутренняя ошибка сервера' });
-  } else {
-    if (!row) {
-      // Выводим сообщение о неверном имени пользователя в консоль сервера
-      console.log(`Неверное имя пользователя: ${login}`);
-      res.status(401).json({ error: 'Неверное имя пользователя или пароль' });
-    } else {
-      bcrypt.compare(password, row.Password, (err, result) => {
-        if (err) {
-          console.error('Ошибка при сравнении паролей:', err.message);
-          res.status(500).json({ error: 'Внутренняя ошибка сервера' });
-        } else {
-          if (result) {
-            const token = jwt.sign({ userId: row.UserID }, 'secret', { expiresIn: '1h' });
-            res.json({ token });
-          } else {
-            // Выводим сообщение о неверном пароле в консоль сервера
-            console.log(`Неверный пароль для пользователя: ${login}`);
-            res.status(401).json({ error: 'Неверное имя пользователя или пароль' });
-          }
-        }
-      });
-    }
-  }
-});
-});
-
-// Конечная точка для регистрации
-app.post('/register', (req, res) => {
-const { fullName, email, login, password } = req.body;
-
-// Проверка наличия всех необходимых данных
-if (!fullName || !email || !login || !password) {
-  return res.status(400).json({ error: 'Все поля обязательны для заполнения' });
-}
-
-// Хеширование пароля
-bcrypt.hash(password, 10, (err, hash) => {
-  if (err) {
-    console.error('Ошибка при хешировании пароля:', err.message);
-    return res.status(500).json({ error: 'Внутренняя ошибка сервера' });
+  if (!surname || !name || !lastname || !email || !login || !password || !roleID) {
+      console.log('Все поля обязательны для заполнения');
+      return res.status(400).send('Все поля обязательны для заполнения');
   }
 
-  // Вставка данных пользователя в базу данных
-  const sql = 'INSERT INTO Users (FullName, Email, Login, Password) VALUES (?, ?, ?, ?)';
-  const params = [fullName, email, login, hash];
-  db.run(sql, params, function (err) {
-    if (err) {
-      console.error('Ошибка при выполнении запроса:', err.message);
-      return res.status(500).json({ error: 'Внутренняя ошибка сервера' });
-    }
+  // Хэширование пароля с использованием bcrypt
+  const saltRounds = 10;
+  const hashedPassword = bcrypt.hashSync(password, saltRounds);
 
-    console.log(`Пользователь ${login} успешно зарегистрирован`);
-    res.json({ message: 'Пользователь успешно зарегистрирован' });
+  const sql = `INSERT INTO Users (Surname, Name, Lastname, Email, Login, Password, RoleID) 
+               VALUES (?, ?, ?, ?, ?, ?, ?)`;
+  db.run(sql, [surname, name, lastname, email, login, hashedPassword, roleID], function(err) {
+      if (err) {
+          console.log('Ошибка при регистрации пользователя:', err.message);
+          return res.status(500).send('Ошибка при регистрации пользователя');
+      }
+      res.status(200).send('Пользователь успешно зарегистрирован');
   });
 });
+
+// Endpoint для входа пользователя
+app.post('/users/login', (req, res) => {
+  const { login, password } = req.body;
+
+  if (!login || !password) {
+      console.log('Все поля обязательны для заполнения');
+      return res.status(400).send('Все поля обязательны для заполнения');
+  }
+
+  const sql = `SELECT * FROM Users WHERE Login = ?`;
+  db.get(sql, [login], (err, user) => {
+      if (err) {
+          console.log('Ошибка при входе пользователя:', err.message);
+          return res.status(500).send('Ошибка при входе пользователя');
+      }
+
+      if (!user) {
+          console.log('Неверный логин или пароль');
+          return res.status(400).send('Неверный логин или пароль');
+      }
+
+      // Проверка пароля с использованием bcrypt
+      const isMatch = bcrypt.compareSync(password, user.password);
+      if (!isMatch) {
+          console.log('Неверный логин или пароль');
+          return res.status(400).send('Неверный логин или пароль');
+      }
+
+      res.status(200).send('Вход успешен');
+  });
 });
+
 
 // Связка файла с заказом
 app.post('/orderfiles', (req, res) => {
