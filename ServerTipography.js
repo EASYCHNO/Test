@@ -43,7 +43,14 @@ app.post('/upload', upload.single('file'), (req, res) => {
   res.send('Файл успешно загружен.');
 });
 
-
+app.get('/files', (req, res) => {
+  fs.readdir('uploads/', (err, files) => {
+    if (err) {
+      return res.status(500).send('Ошибка чтения директории');
+    }
+    res.send(files);
+  });
+});
 
 
 /*const storage = multer.diskStorage({
@@ -207,7 +214,7 @@ db.all(sql, [], (err, rows) => {
 });
 
 // Получение списка файлов
-app.get('/files', (req, res) => {
+/*app.get('/files', (req, res) => {
 const sql = 'SELECT * FROM Files';
 db.all(sql, [], (err, rows) => {
   if (err) {
@@ -217,7 +224,7 @@ db.all(sql, [], (err, rows) => {
     res.json(rows);
   }
 });
-});
+});*/
 
 // Создание нового заказа
 app.post('/orders', (req, res) => {
