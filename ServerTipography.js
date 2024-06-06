@@ -6,8 +6,6 @@ const multer = require('multer');
 const fs = require('fs');
 const path = require('path');
 const bodyParser = require('body-parser');
-const libre = require('libreoffice-convert');
-const { exec } = require('child_process');
 
 
 const app = express();
@@ -36,53 +34,13 @@ const storage = multer.diskStorage({
 app.use(express.json());
 
 const upload = multer({ storage: storage }); // Загруженные файлы будут сохраняться в папку 'uploads/'
-
-// Проверка наличия soffice
-exec('which soffice', (error, stdout, stderr) => {
-  if (error) {
-    console.error(`Ошибка: ${error.message}`);
-    return;
-  }
-  if (stderr) {
-    console.error(`stderr: ${stderr}`);
-    return;
-  }
-  console.log(`soffice binary path: ${stdout}`);
-});
-
-// Конвертация файла в PDF
-const convertToPdf = (inputPath, outputPath) => {
-  const file = fs.readFileSync(inputPath);
-  libre.convert(file, '.pdf', undefined, (err, done) => {
-    if (err) {
-      console.log(`Ошибка конвертации файла: ${err}`);
-      return;
-    }
-    fs.writeFileSync(outputPath, done);
-  });
-};
-
 app.post('/upload', upload.single('file'), (req, res) => {
   const file = req.file;
   if (!file) {
     return res.status(400).send('Файл не загружен');
   }
 
-  const ext = path.extname(file.originalname).toLowerCase();
-  const supportedFormats = ['.doc', '.docx', '.pdf', '.rtf'];
-
-  if (!supportedFormats.includes(ext)) {
-    return res.status(400).send('Неподдерживаемый формат файла');
-  }
-
-  const outputFilePath = path.join(__dirname, 'uploads', path.basename(file.originalname, ext) + '.pdf');
-
-  if (ext === '.pdf') {
-    res.send('Файл загружен и сохранён без изменений.');
-  } else {
-    convertToPdf(file.path, outputFilePath);
-    res.send('Файл загружен и конвертирован в PDF.');
-  }
+  res.send('Файл успешно загружен.');
 });
 
 
