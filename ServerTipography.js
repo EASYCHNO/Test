@@ -217,7 +217,6 @@ app.post('/client/register', (req, res) => {
 
 // Endpoint для входа клиента
 app.post('/client/login', (req, res) => {
-  console.log("данные для входа:", req.body);
   const { login, password } = req.body;
 
   if (!login || !password) {
@@ -237,10 +236,12 @@ app.post('/client/login', (req, res) => {
           return res.status(400).send('Неверный логин или пароль');
       }
 
+      // Проверка пароля с использованием bcrypt
       console.log('Проверка пароля для пользователя:', user);
       console.log('Введенный пароль:', password);
       console.log('Хэшированный пароль пользователя:', user.Password);
 
+      // Добавим проверку на существование пароля в БД
       if (!user.Password) {
           console.log('Пароль пользователя отсутствует в базе данных');
           return res.status(400).send('Неверный логин или пароль');
@@ -252,15 +253,12 @@ app.post('/client/login', (req, res) => {
           return res.status(400).send('Неверный логин или пароль');
       }
 
-      if (user.RoleID != 3) {
-          console.log('Пользователь не имеет доступа к программе для клиентов');
+      if (user.RoleID != 3){
+          console.log('Пользователь не имеет доступа к программе для клиентов')
           return res.status(400).send('Нет доступа к программе для клиентов');
       }
 
-      // Создание JWT
-      const token = jwt.sign({ userID: user.UserID, role: user.RoleID }, secretKey, { expiresIn: '1h' });
-
-      res.status(200).json({ user, token });
+      res.status(200).json(user);
   });
 });
 
