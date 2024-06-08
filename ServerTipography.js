@@ -21,6 +21,8 @@ const db = new sqlite3.Database('./Test.db', (err) => {
   }
 });
 
+const SECRET_KEY = 'sunyaevkey';
+
 // Настройка multer для сохранения файлов
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
@@ -40,12 +42,15 @@ function authenticateToken(req, res, next) {
 
   if (token == null) return res.sendStatus(401);
 
-  jwt.verify(token, 'your_jwt_secret', (err, user) => {
-    if (err) return res.sendStatus(403);
-    req.userId = user.userId; // Предполагается, что userId хранится в токене
-    next();
+  jwt.verify(token, SECRET_KEY, (err, user) => {
+      if (err) return res.sendStatus(403);
+      req.user = user;
+      next();
   });
 }
+app.get('/protected', authenticateToken, (req, res) => {
+  res.send('Доступ к защищенному ресурсу');
+});
 
 app.post('/upload', authenticateToken, uploads.single('file'), (req, res) => {
   const file = req.file;
@@ -258,7 +263,6 @@ app.post('/client/login', (req, res) => {
       console.log('Введенный пароль:', password);
       console.log('Хэшированный пароль пользователя:', user.Password);
 
-      // Добавим проверку на существование пароля в БД
       if (!user.Password) {
           console.log('Пароль пользователя отсутствует в базе данных');
           return res.status(400).send('Неверный логин или пароль');
@@ -270,12 +274,14 @@ app.post('/client/login', (req, res) => {
           return res.status(400).send('Неверный логин или пароль');
       }
 
-      if (user.RoleID != 3){
-          console.log('Пользователь не имеет доступа к программе для клиентов')
+      if (user.RoleID != 3) {
+          console.log('Пользователь не имеет доступа к программе для клиентов');
           return res.status(400).send('Нет доступа к программе для клиентов');
       }
 
-      res.status(200).json(user);
+      // Генерация JWT токена
+      const token = jwt.sign({ userID: user.ID, roleID: user.RoleID }, SECRET_KEY, { expiresIn: '1h' });
+      res.status(200).json({ token });
   });
 });
 
