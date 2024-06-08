@@ -53,6 +53,7 @@ app.get('/protected', authenticateToken, (req, res) => {
 });
 
 app.post('/upload', authenticateToken, uploads.single('file'), (req, res) => {
+  console.log('Файл загружен:', req.file);
   const file = req.file;
   const userId = req.userId; // Получение userId из middleware
   const orderDate = new Date().toISOString().split('T')[0]; // Текущая дата в формате YYYY-MM-DD
