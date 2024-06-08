@@ -324,6 +324,20 @@ db.all(sql, [], (err, rows) => {
 });
 });
 
+// Получение списка заказов
+app.get('/allfiles', (req, res) => {
+const sql = 'SELECT * FROM Orders';
+db.all(sql, [], (err, rows) => {
+  if (err) {
+    console.error('Ошибка получения заказов:', err.message);
+    res.status(500).json({ error: 'Внутренняя ошибка сервера' });
+  } else {
+    res.json(rows);
+  }
+});
+});
+
+
 app.post('/order', authenticateToken, (req, res) => {
   const { fileID, orderDate, statusID, orderPrice } = req.body;
   const userID = req.user.userID; // Получаем userID из проверенного токена
