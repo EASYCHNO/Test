@@ -32,11 +32,9 @@ const storage = multer.diskStorage({
   }
 });
 
+const uploads = multer({ storage: storage });
 
-// Middleware для парсинга JSON
-app.use(express.json());
-
-app.post('/upload', upload.single('file'), (req, res) => {
+app.post('/upload', uploads.single('file'), (req, res) => {
   const file = req.file;
   if (!file) {
       return res.status(400).send('Файл не загружен');
@@ -54,6 +52,12 @@ app.post('/upload', upload.single('file'), (req, res) => {
       res.status(200).send({ fileID: this.lastID, message: 'Файл успешно загружен' });
   });
 });
+
+
+// Middleware для парсинга JSON
+app.use(express.json());
+
+
 
 app.get('/files', (req, res) => {
   fs.readdir('uploads/', (err, files) => {
