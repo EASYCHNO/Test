@@ -6,10 +6,10 @@ const multer = require('multer');
 const fs = require('fs');
 const path = require('path');
 const bodyParser = require('body-parser');
-
-
 const app = express();
 const PORT = 3000;
+const secretKey = 'sunyaevsecretkey';
+
 app.use(bodyParser.json());
 app.use(express.json());
 
