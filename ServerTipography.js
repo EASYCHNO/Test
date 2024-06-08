@@ -32,25 +32,16 @@ const storage = multer.diskStorage({
   }
 });
 
-const uploads = multer({ storage: storage });
+//const uploads = multer({ storage: storage });
 
+const uploads = multer({ storage: storage }); // Загруженные файлы будут сохраняться в папку 'uploads/'
 app.post('/upload', uploads.single('file'), (req, res) => {
   const file = req.file;
   if (!file) {
-      return res.status(400).send('Файл не загружен');
+    return res.status(400).send('Файл не загружен');
   }
 
-  const filePath = file.path.replace(/\\/g, '/'); // Корректный путь файла для записи в БД
-  const fileName = file.originalname;
-
-  // Запись информации о файле в базу данных
-  const sql = 'INSERT INTO Files (FileName, FilePath) VALUES (?, ?)';
-  db.run(sql, [fileName, filePath], function (err) {
-      if (err) {
-          return res.status(500).send('Ошибка при записи файла в базу данных');
-      }
-      res.status(200).send({ fileID: this.lastID, message: 'Файл успешно загружен' });
-  });
+  res.send('Файл успешно загружен.');
 });
 
 
