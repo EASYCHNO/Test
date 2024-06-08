@@ -8,7 +8,6 @@ const path = require('path');
 const bodyParser = require('body-parser');
 const app = express();
 const PORT = 3000;
-const secretKey = 'sunyaevsecretkey';
 
 app.use(bodyParser.json());
 app.use(express.json());
@@ -22,35 +21,74 @@ const db = new sqlite3.Database('./Test.db', (err) => {
   }
 });
 
-// Настройка хранилища multer
+// Настройка multer для сохранения файлов
 const storage = multer.diskStorage({
-  destination: function (req, file, cb) {
-      cb(null, 'uploads/'); // Папка для загрузок
+  destination: (req, file, cb) => {
+    cb(null, 'uploads/');
   },
-  filename: function (req, file, cb) {
-      cb(null, Date.now() + '-' + file.originalname); // Уникальное имя файла
+  filename: (req, file, cb) => {
+    cb(null, file.originalname);
   }
 });
 
-//const uploads = multer({ storage: storage });
-
 const uploads = multer({ storage: storage }); // Загруженные файлы будут сохраняться в папку 'uploads/'
-app.post('/upload', uploads.single('file'), (req, res) => {
-  console.log("Загруженный файл:", req.body);
+
+// Middleware для проверки JWT токена и извлечения userId
+function authenticateToken(req, res, next) {
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1];
+
+  if (token == null) return res.sendStatus(401);
+
+  jwt.verify(token, 'your_jwt_secret', (err, user) => {
+    if (err) return res.sendStatus(403);
+    req.userId = user.userId; // Предполагается, что userId хранится в токене
+    next();
+  });
+}
+
+app.post('/upload', authenticateToken, uploads.single('file'), (req, res) => {
   const file = req.file;
+  const userId = req.userId; // Получение userId из middleware
+  const orderDate = new Date().toISOString().split('T')[0]; // Текущая дата в формате YYYY-MM-DD
+
   if (!file) {
     return res.status(400).send('Файл не загружен');
   }
 
-  res.send('Файл успешно загружен.');
+  db.serialize(() => {
+    // Вставка в таблицу Files
+    db.run(`INSERT INTO Files (FileName, FilePath) VALUES (?, ?)`, [file.originalname, file.path], function (err) {
+      if (err) {
+        return res.status(500).send('Ошибка записи в таблицу Files');
+      }
+
+      const fileId = this.lastID;
+
+      // Вставка в таблицу Orders
+      db.run(`INSERT INTO Orders (UserID, OrderDate, StatusID, OrderPrice) VALUES (?, ?, ?, ?)`, [userId, orderDate, 1, 35], function (err) {
+        if (err) {
+          return res.status(500).send('Ошибка записи в таблицу Orders');
+        }
+
+        const orderId = this.lastID;
+
+        // Вставка в таблицу OrderFiles
+        db.run(`INSERT INTO OrderFiles (OrderID, FileID) VALUES (?, ?)`, [orderId, fileId], function (err) {
+          if (err) {
+            return res.status(500).send('Ошибка записи в таблицу OrderFiles');
+          }
+
+          res.send('Файл успешно загружен и заказ оформлен.');
+        });
+      });
+    });
+  });
 });
 
 
 // Middleware для парсинга JSON
 app.use(express.json());
-
-
-
 app.get('/files', (req, res) => {
 
   fs.readdir('uploads/', (err, files) => {
@@ -60,18 +98,6 @@ app.get('/files', (req, res) => {
     res.send(files);
   });
 });
-
-
-/*const storage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    cb(null, 'uploads/');
-  },
-  filename: function (req, file, cb) {
-    cb(null, Date.now() + '-' + file.originalname); // Генерируем уникальное имя файла
-  }
-});*/
-
-//const upload = multer({ storage: storage });
 
 // Получение списка заказов с файлами
 app.get('/orderswithfiles', (req, res) => {
@@ -93,8 +119,6 @@ app.get('/orderswithfiles', (req, res) => {
     }
   });
 });
-
-
 
 // Возвращение информации о файле по ID
 app.get('/files/:id', (req, res) => {
@@ -283,32 +307,6 @@ db.all(sql, [], (err, rows) => {
   }
 });
 });
-
-// Получение списка файлов
-/*app.get('/files', (req, res) => {
-const sql = 'SELECT * FROM Files';
-db.all(sql, [], (err, rows) => {
-  if (err) {
-    console.error('Ошибка получения заказов:', err.message);
-    res.status(500).json({ error: 'Внутренняя ошибка сервера' });
-  } else {
-    res.json(rows);
-  }
-});
-});*/
-
-function authenticateToken(req, res, next) {
-  const authHeader = req.headers['authorization'];
-  const token = authHeader && authHeader.split(' ')[1];
-
-  if (token == null) return res.status(401).send('Токен не предоставлен');
-
-  jwt.verify(token, secretKey, (err, user) => {
-      if (err) return res.status(403).send('Недействительный токен');
-      req.user = user;
-      next();
-  });
-}
 
 app.post('/order', authenticateToken, (req, res) => {
   const { fileID, orderDate, statusID, orderPrice } = req.body;
