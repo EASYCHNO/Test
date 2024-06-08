@@ -36,6 +36,7 @@ const storage = multer.diskStorage({
 
 const uploads = multer({ storage: storage }); // Загруженные файлы будут сохраняться в папку 'uploads/'
 app.post('/upload', uploads.single('file'), (req, res) => {
+  console.log("Загруженный файл:", req.body);
   const file = req.file;
   if (!file) {
     return res.status(400).send('Файл не загружен');
@@ -51,6 +52,7 @@ app.use(express.json());
 
 
 app.get('/files', (req, res) => {
+
   fs.readdir('uploads/', (err, files) => {
     if (err) {
       return res.status(500).send('Ошибка чтения директории');
