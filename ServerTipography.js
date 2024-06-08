@@ -128,13 +128,15 @@ db.get(sql, [fileId], (err, row) => {
 });
 });
 
-// Endpoint для регистрации пользователя
+// Endpoint для регистрации работника
 app.post('/users/register', (req, res) => {
   const { surname, name, lastname, email, login, password, roleID } = req.body;
 
+  console.log("Регистрационные данные:", req.body); // Логируем полученные данные
+
   if (!surname || !name || !lastname || !email || !login || !password || !roleID) {
-      console.log('Все поля обязательны для заполнения');
-      return res.status(400).send('Все поля обязательны для заполнения');
+      console.log('Необходимо заполнить все поля для регистрации');
+      return res.status(400).send('Необходимо заполнить все поля для регистрации');
   }
 
   // Хэширование пароля с использованием bcrypt
@@ -152,13 +154,13 @@ app.post('/users/register', (req, res) => {
   });
 });
 
-// Endpoint для входа пользователя
+// Endpoint для входа работника
 app.post('/users/login', (req, res) => {
-  const { login, password } = req.body;
+  const { login, password, roleID } = req.body;
 
   if (!login || !password) {
-      console.log('Все поля обязательны для заполнения');
-      return res.status(400).send('Все поля обязательны для заполнения');
+      console.log('Необходимо заполнить все поля для входа');
+      return res.status(400).send('Необходимо заполнить все поля для входа');
   }
 
   const sql = `SELECT * FROM Users WHERE Login = ?`;
@@ -174,15 +176,105 @@ app.post('/users/login', (req, res) => {
       }
 
       // Проверка пароля с использованием bcrypt
-      const isMatch = bcrypt.compareSync(password, user.password);
+      console.log('Проверка пароля для пользователя:', user);
+      console.log('Введенный пароль:', password);
+      console.log('Хэшированный пароль пользователя:', user.Password);
+      
+      // Добавим проверку на существование пароля в БД
+      if (!user.Password) {
+          console.log('Пароль пользователя отсутствует в базе данных');
+          return res.status(400).send('Неверный логин или пароль');
+      }
+
+      const isMatch = bcrypt.compareSync(password, user.Password);
       if (!isMatch) {
           console.log('Неверный логин или пароль');
           return res.status(400).send('Неверный логин или пароль');
       }
 
-      res.status(200).send('Вход успешен');
+      if (user.RoleID != 2){
+        console.log('Пользователь не имеет доступа к программе для работников')
+        return res.status(400).send('Нет доступа к программе для работников');
+      }
+
+      res.status(200).json(user);
   });
 });
+
+
+// Endpoint для регистрации работника
+app.post('/client/register', (req, res) => {
+  const { surname, name, lastname, email, login, password, roleID } = req.body;
+
+  console.log("Регистрационные данные:", req.body); // Логируем полученные данные
+
+  if (!surname || !name || !lastname || !email || !login || !password || !roleID) {
+      console.log('Необходимо заполнить все поля для регистрации');
+      return res.status(400).send('Необходимо заполнить все поля для регистрации');
+  }
+
+  // Хэширование пароля с использованием bcrypt
+  const saltRounds = 10;
+  const hashedPassword = bcrypt.hashSync(password, saltRounds);
+
+  const sql = `INSERT INTO Users (Surname, Name, Lastname, Email, Login, Password, RoleID) 
+               VALUES (?, ?, ?, ?, ?, ?, ?)`;
+  db.run(sql, [surname, name, lastname, email, login, hashedPassword, roleID], function(err) {
+      if (err) {
+          console.log('Ошибка при регистрации пользователя:', err.message);
+          return res.status(500).send('Ошибка при регистрации пользователя');
+      }
+      res.status(200).send('Пользователь успешно зарегистрирован');
+  });
+});
+
+// Endpoint для входа работника
+app.post('/client/login', (req, res) => {
+  const { login, password, roleID } = req.body;
+
+  if (!login || !password) {
+      console.log('Необходимо заполнить все поля для входа');
+      return res.status(400).send('Необходимо заполнить все поля для входа');
+  }
+
+  const sql = `SELECT * FROM Users WHERE Login = ?`;
+  db.get(sql, [login], (err, user) => {
+      if (err) {
+          console.log('Ошибка при входе пользователя:', err.message);
+          return res.status(500).send('Ошибка при входе пользователя');
+      }
+
+      if (!user) {
+          console.log('Неверный логин или пароль');
+          return res.status(400).send('Неверный логин или пароль');
+      }
+
+      // Проверка пароля с использованием bcrypt
+      console.log('Проверка пароля для пользователя:', user);
+      console.log('Введенный пароль:', password);
+      console.log('Хэшированный пароль пользователя:', user.Password);
+      
+      // Добавим проверку на существование пароля в БД
+      if (!user.Password) {
+          console.log('Пароль пользователя отсутствует в базе данных');
+          return res.status(400).send('Неверный логин или пароль');
+      }
+
+      const isMatch = bcrypt.compareSync(password, user.Password);
+      if (!isMatch) {
+          console.log('Неверный логин или пароль');
+          return res.status(400).send('Неверный логин или пароль');
+      }
+
+      if (user.RoleID != 3){
+        console.log('Пользователь не имеет доступа к программе для клиентов')
+        return res.status(400).send('Нет доступа к программе для клиентов');
+      }
+
+      res.status(200).json(user);
+  });
+});
+
 
 
 // Связка файла с заказом
