@@ -11,7 +11,6 @@ const PORT = 3000;
 
 app.use(bodyParser.json());
 app.use(express.json());
-
 // Подключение к базе данных SQLite
 const db = new sqlite3.Database('./Test.db', (err) => {
   if (err) {
@@ -40,25 +39,34 @@ function authenticateToken(req, res, next) {
   const authHeader = req.headers['authorization'];
   const token = authHeader && authHeader.split(' ')[1];
 
-  if (token == null) return res.sendStatus(401);
+  if (token == null) {
+    console.log('Токен отсутствует');
+    return res.sendStatus(401);
+  }
 
   jwt.verify(token, SECRET_KEY, (err, user) => {
-      if (err) return res.sendStatus(403);
-      req.user = user;
-      next();
+    if (err) {
+      console.log('Ошибка верификации токена:', err.message);
+      return res.sendStatus(403);
+    }
+    req.user = user;
+    next();
   });
 }
+
 app.get('/protected', authenticateToken, (req, res) => {
   res.send('Доступ к защищенному ресурсу');
 });
 
+// Загрузка файлов
 app.post('/upload', authenticateToken, uploads.single('file'), (req, res) => {
   console.log('Файл загружен:', req.file);
   const file = req.file;
-  const userId = req.userId; // Получение userId из middleware
+  const userId = req.user.id; // Получение userId из middleware
   const orderDate = new Date().toISOString().split('T')[0]; // Текущая дата в формате YYYY-MM-DD
 
   if (!file) {
+    console.log('Файл не загружен');
     return res.status(400).send('Файл не загружен');
   }
 
@@ -66,6 +74,7 @@ app.post('/upload', authenticateToken, uploads.single('file'), (req, res) => {
     // Вставка в таблицу Files
     db.run(`INSERT INTO Files (FileName, FilePath) VALUES (?, ?)`, [file.originalname, file.path], function (err) {
       if (err) {
+        console.log('Ошибка записи в таблицу Files:', err.message);
         return res.status(500).send('Ошибка записи в таблицу Files');
       }
 
@@ -74,6 +83,7 @@ app.post('/upload', authenticateToken, uploads.single('file'), (req, res) => {
       // Вставка в таблицу Orders
       db.run(`INSERT INTO Orders (UserID, OrderDate, StatusID, OrderPrice) VALUES (?, ?, ?, ?)`, [userId, orderDate, 1, 35], function (err) {
         if (err) {
+          console.log('Ошибка записи в таблицу Orders:', err.message);
           return res.status(500).send('Ошибка записи в таблицу Orders');
         }
 
@@ -82,6 +92,7 @@ app.post('/upload', authenticateToken, uploads.single('file'), (req, res) => {
         // Вставка в таблицу OrderFiles
         db.run(`INSERT INTO OrderFiles (OrderID, FileID) VALUES (?, ?)`, [orderId, fileId], function (err) {
           if (err) {
+            console.log('Ошибка записи в таблицу OrderFiles:', err.message);
             return res.status(500).send('Ошибка записи в таблицу OrderFiles');
           }
 
@@ -93,12 +104,12 @@ app.post('/upload', authenticateToken, uploads.single('file'), (req, res) => {
 });
 
 
-// Middleware для парсинга JSON
-app.use(express.json());
-app.get('/files', (req, res) => {
 
+// Чтение списка файлов
+app.get('/files', (req, res) => {
   fs.readdir('uploads/', (err, files) => {
     if (err) {
+      console.log('Ошибка чтения директории:', err.message);
       return res.status(500).send('Ошибка чтения директории');
     }
     res.send(files);
