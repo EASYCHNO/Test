@@ -202,8 +202,9 @@ app.post('/users/login', (req, res) => {
 });
 
 
-// Endpoint для регистрации работника
+// Endpoint для регистрации клиента
 app.post('/client/register', (req, res) => {
+  console.log("Регистрационные данные:", req.body); // Логируем полученные данные
   const { surname, name, lastname, email, login, password, roleID } = req.body;
 
   console.log("Регистрационные данные:", req.body); // Логируем полученные данные
@@ -228,7 +229,7 @@ app.post('/client/register', (req, res) => {
   });
 });
 
-// Endpoint для входа работника
+// Endpoint для входа клиента
 app.post('/client/login', (req, res) => {
   const { login, password, roleID } = req.body;
 
