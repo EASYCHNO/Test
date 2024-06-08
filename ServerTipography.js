@@ -11,6 +11,7 @@ const PORT = 3000;
 
 app.use(bodyParser.json());
 app.use(express.json());
+
 // Подключение к базе данных SQLite
 const db = new sqlite3.Database('./Test.db', (err) => {
   if (err) {
@@ -34,36 +35,14 @@ const storage = multer.diskStorage({
 
 const uploads = multer({ storage: storage }); // Загруженные файлы будут сохраняться в папку 'uploads/'
 
-// Middleware для проверки JWT токена и извлечения userId
-function authenticateToken(req, res, next) {
-  const authHeader = req.headers['authorization'];
-  const token = authHeader && authHeader.split(' ')[1];
 
-  if (token == null) {
-    console.log('Токен отсутствует');
-    return res.sendStatus(401);
-  }
-
-  jwt.verify(token, SECRET_KEY, (err, user) => {
-    if (err) {
-      console.log('Ошибка верификации токена:', err.message);
-      return res.sendStatus(403);
-    }
-    req.user = user;
-    next();
-  });
-}
-
-app.get('/protected', authenticateToken, (req, res) => {
-  res.send('Доступ к защищенному ресурсу');
-});
 
 // Загрузка файлов
 app.post('/upload', authenticateToken, uploads.single('file'), (req, res) => {
   console.log('Файл загружен:', req.file);
   const file = req.file;
-  const userId = req.user.id; // Получение userId из middleware
-  const orderDate = new Date().toISOString().split('T')[0]; // Текущая дата в формате YYYY-MM-DD
+  const userId = req.user.userID;
+  const orderDate = new Date().toISOString().split('T')[0];
 
   if (!file) {
     console.log('Файл не загружен');
@@ -71,7 +50,6 @@ app.post('/upload', authenticateToken, uploads.single('file'), (req, res) => {
   }
 
   db.serialize(() => {
-    // Вставка в таблицу Files
     db.run(`INSERT INTO Files (FileName, FilePath) VALUES (?, ?)`, [file.originalname, file.path], function (err) {
       if (err) {
         console.log('Ошибка записи в таблицу Files:', err.message);
@@ -80,7 +58,6 @@ app.post('/upload', authenticateToken, uploads.single('file'), (req, res) => {
 
       const fileId = this.lastID;
 
-      // Вставка в таблицу Orders
       db.run(`INSERT INTO Orders (UserID, OrderDate, StatusID, OrderPrice) VALUES (?, ?, ?, ?)`, [userId, orderDate, 1, 35], function (err) {
         if (err) {
           console.log('Ошибка записи в таблицу Orders:', err.message);
@@ -89,7 +66,6 @@ app.post('/upload', authenticateToken, uploads.single('file'), (req, res) => {
 
         const orderId = this.lastID;
 
-        // Вставка в таблицу OrderFiles
         db.run(`INSERT INTO OrderFiles (OrderID, FileID) VALUES (?, ?)`, [orderId, fileId], function (err) {
           if (err) {
             console.log('Ошибка записи в таблицу OrderFiles:', err.message);
@@ -102,8 +78,6 @@ app.post('/upload', authenticateToken, uploads.single('file'), (req, res) => {
     });
   });
 });
-
-
 
 // Чтение списка файлов
 app.get('/files', (req, res) => {
@@ -249,7 +223,7 @@ app.post('/client/register', (req, res) => {
   });
 });
 
-// Endpoint для входа клиента
+// Маршрут для аутентификации клиента
 app.post('/client/login', (req, res) => {
   const { login, password } = req.body;
 
@@ -292,9 +266,33 @@ app.post('/client/login', (req, res) => {
       }
 
       // Генерация JWT токена
-      const token = jwt.sign({ userID: user.ID, roleID: user.RoleID }, SECRET_KEY, { expiresIn: '1h' });
+      const token = jwt.sign({ userID: user.UserID, roleID: user.RoleID }, SECRET_KEY, { expiresIn: '1h' });
       res.status(200).json({ token });
   });
+});
+
+// Middleware для проверки JWT токена и извлечения userId
+function authenticateToken(req, res, next) {
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1];
+
+  if (!token) {
+    console.log('Токен отсутствует');
+    return res.sendStatus(401);
+  }
+
+  jwt.verify(token, SECRET_KEY, (err, user) => {
+    if (err) {
+      console.log('Ошибка верификации токена:', err.message);
+      return res.sendStatus(403);
+    }
+    req.user = user;
+    next();
+  });
+}
+
+app.get('/protected', authenticateToken, (req, res) => {
+  res.send('Доступ к защищенному ресурсу');
 });
 
 
