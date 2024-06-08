@@ -11,6 +11,7 @@ const bodyParser = require('body-parser');
 const app = express();
 const PORT = 3000;
 app.use(bodyParser.json());
+app.use(express.json());
 
 // Подключение к базе данных SQLite
 const db = new sqlite3.Database('./Test.db', (err) => {
@@ -204,17 +205,14 @@ app.post('/users/login', (req, res) => {
 
 // Endpoint для регистрации клиента
 app.post('/client/register', (req, res) => {
-  console.log("Регистрационные данные:", req.body); // Логируем полученные данные
+  console.log("Регистрационные данные:", req.body);
   const { surname, name, lastname, email, login, password, roleID } = req.body;
-
-  console.log("Регистрационные данные:", req.body); // Логируем полученные данные
 
   if (!surname || !name || !lastname || !email || !login || !password || !roleID) {
       console.log('Необходимо заполнить все поля для регистрации');
       return res.status(400).send('Необходимо заполнить все поля для регистрации');
   }
 
-  // Хэширование пароля с использованием bcrypt
   const saltRounds = 10;
   const hashedPassword = bcrypt.hashSync(password, saltRounds);
 
@@ -228,6 +226,7 @@ app.post('/client/register', (req, res) => {
       res.status(200).send('Пользователь успешно зарегистрирован');
   });
 });
+
 
 // Endpoint для входа клиента
 app.post('/client/login', (req, res) => {
