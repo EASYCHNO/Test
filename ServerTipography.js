@@ -217,6 +217,7 @@ app.post('/client/register', (req, res) => {
 
 // Endpoint для входа клиента
 app.post('/client/login', (req, res) => {
+  console.log("данные для входа:", req.body);
   const { login, password } = req.body;
 
   if (!login || !password) {
