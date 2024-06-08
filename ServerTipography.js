@@ -22,26 +22,37 @@ const db = new sqlite3.Database('./Test.db', (err) => {
   }
 });
 
+// Настройка хранилища multer
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
-    cb(null, 'uploads/');
+      cb(null, 'uploads/'); // Папка для загрузок
   },
   filename: function (req, file, cb) {
-    cb(null, file.originalname);
+      cb(null, Date.now() + '-' + file.originalname); // Уникальное имя файла
   }
 });
+
 
 // Middleware для парсинга JSON
 app.use(express.json());
 
-const upload = multer({ storage: storage }); // Загруженные файлы будут сохраняться в папку 'uploads/'
 app.post('/upload', upload.single('file'), (req, res) => {
   const file = req.file;
   if (!file) {
-    return res.status(400).send('Файл не загружен');
+      return res.status(400).send('Файл не загружен');
   }
 
-  res.send('Файл успешно загружен.');
+  const filePath = file.path.replace(/\\/g, '/'); // Корректный путь файла для записи в БД
+  const fileName = file.originalname;
+
+  // Запись информации о файле в базу данных
+  const sql = 'INSERT INTO Files (FileName, FilePath) VALUES (?, ?)';
+  db.run(sql, [fileName, filePath], function (err) {
+      if (err) {
+          return res.status(500).send('Ошибка при записи файла в базу данных');
+      }
+      res.status(200).send({ fileID: this.lastID, message: 'Файл успешно загружен' });
+  });
 });
 
 app.get('/files', (req, res) => {
@@ -86,34 +97,7 @@ app.get('/orderswithfiles', (req, res) => {
   });
 });
 
-// Маршрут для загрузки файлов
-/*app.post('/upload', upload.single('file'), (req, res) => {
-  if (!req.file) {
-    return res.status(400).json({ error: 'Файл не был загружен' });
-  }
-  const inputFilePath = req.file.path;
-  const fileName = req.file.originalname;
-  const outputFilePath = path.join('uploads', `${path.parse(fileName).name}.pdf`);
 
-convertFileToPDF(inputFilePath, outputFilePath, (err, result) => {
-  if (err) {
-    console.error('Ошибка конвертации файла:', err);
-    return res.status(500).json({ error: 'Ошибка конвертации файла' });
-  }
-
-  // Сохраняем информацию о файле в базе данных
-  const sql = 'INSERT INTO Files (FileName, FilePath) VALUES (?, ?)';
-  const params = [fileName, outputFilePath]; // Сохраняем путь к PDF файлу
-  db.run(sql, params, function (err) {
-    if (err) {
-      console.error('Ошибка сохранения информации о файле:', err.message);
-      return res.status(500).json({ error: 'Внутренняя ошибка сервера' });
-    }
-
-    res.json({ message: 'Файл успешно загружен и сконвертирован', fileId: this.lastID });
-  });
-});
-});*/
 
 // Возвращение информации о файле по ID
 app.get('/files/:id', (req, res) => {
@@ -227,7 +211,6 @@ app.post('/client/register', (req, res) => {
   });
 });
 
-
 // Endpoint для входа клиента
 app.post('/client/login', (req, res) => {
   const { login, password } = req.body;
@@ -249,12 +232,10 @@ app.post('/client/login', (req, res) => {
           return res.status(400).send('Неверный логин или пароль');
       }
 
-      // Проверка пароля с использованием bcrypt
       console.log('Проверка пароля для пользователя:', user);
       console.log('Введенный пароль:', password);
       console.log('Хэшированный пароль пользователя:', user.Password);
 
-      // Добавим проверку на существование пароля в БД
       if (!user.Password) {
           console.log('Пароль пользователя отсутствует в базе данных');
           return res.status(400).send('Неверный логин или пароль');
@@ -266,15 +247,17 @@ app.post('/client/login', (req, res) => {
           return res.status(400).send('Неверный логин или пароль');
       }
 
-      if (user.RoleID != 3){
-          console.log('Пользователь не имеет доступа к программе для клиентов')
+      if (user.RoleID != 3) {
+          console.log('Пользователь не имеет доступа к программе для клиентов');
           return res.status(400).send('Нет доступа к программе для клиентов');
       }
 
-      res.status(200).json(user);
+      // Создание JWT
+      const token = jwt.sign({ userID: user.UserID, role: user.RoleID }, secretKey, { expiresIn: '1h' });
+
+      res.status(200).json({ user, token });
   });
 });
-
 
 
 // Связка файла с заказом
@@ -318,20 +301,42 @@ db.all(sql, [], (err, rows) => {
 });
 });*/
 
-// Создание нового заказа
-app.post('/orders', (req, res) => {
-const { UserID, OrderDate, StatusID } = req.body;
-const sql = 'INSERT INTO Orders (UserID, OrderDate, StatusID) VALUES (?, ?, ?)';
-const params = [UserID, OrderDate, StatusID];
-db.run(sql, params, function (err) {
-  if (err) {
-    console.error('Ошибка создания заказа:', err.message);
-    res.status(500).json({ error: 'Внутренняя ошибка сервера' });
-  } else {
-    console.log(`Создан заказ с ID: ${this.lastID}`);
-    res.status(201).json({ message: 'Заказ успешно создан', orderID: this.lastID });
+function authenticateToken(req, res, next) {
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1];
+
+  if (token == null) return res.status(401).send('Токен не предоставлен');
+
+  jwt.verify(token, secretKey, (err, user) => {
+      if (err) return res.status(403).send('Недействительный токен');
+      req.user = user;
+      next();
+  });
+}
+
+app.post('/order', authenticateToken, (req, res) => {
+  const { fileID, orderDate, statusID, orderPrice } = req.body;
+  const userID = req.user.userID; // Получаем userID из проверенного токена
+
+  if (!userID || !fileID || !orderDate || !statusID) {
+      return res.status(400).send('Необходимо заполнить все поля заказа');
   }
-});
+
+  const sqlOrder = `INSERT INTO Orders (UserID, OrderDate, StatusID, OrderPrice) VALUES (?, ?, ?, ?)`;
+  db.run(sqlOrder, [userID, orderDate, statusID, orderPrice], function (err) {
+      if (err) {
+          return res.status(500).send('Ошибка при создании заказа');
+      }
+
+      const orderID = this.lastID;
+      const sqlOrderFile = `INSERT INTO OrderFiles (OrderID, FileID) VALUES (?, ?)`;
+      db.run(sqlOrderFile, [orderID, fileID], function (err) {
+          if (err) {
+              return res.status(500).send('Ошибка при добавлении файла к заказу');
+          }
+          res.status(200).send({ orderID: orderID, message: 'Заказ успешно создан' });
+      });
+  });
 });
 
 // Обновление статуса заказа
