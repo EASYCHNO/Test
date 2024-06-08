@@ -230,7 +230,7 @@ app.post('/client/register', (req, res) => {
 
 // Endpoint для входа клиента
 app.post('/client/login', (req, res) => {
-  const { login, password, roleID } = req.body;
+  const { login, password } = req.body;
 
   if (!login || !password) {
       console.log('Необходимо заполнить все поля для входа');
@@ -253,7 +253,7 @@ app.post('/client/login', (req, res) => {
       console.log('Проверка пароля для пользователя:', user);
       console.log('Введенный пароль:', password);
       console.log('Хэшированный пароль пользователя:', user.Password);
-      
+
       // Добавим проверку на существование пароля в БД
       if (!user.Password) {
           console.log('Пароль пользователя отсутствует в базе данных');
@@ -267,8 +267,8 @@ app.post('/client/login', (req, res) => {
       }
 
       if (user.RoleID != 3){
-        console.log('Пользователь не имеет доступа к программе для клиентов')
-        return res.status(400).send('Нет доступа к программе для клиентов');
+          console.log('Пользователь не имеет доступа к программе для клиентов')
+          return res.status(400).send('Нет доступа к программе для клиентов');
       }
 
       res.status(200).json(user);
