@@ -326,7 +326,7 @@ db.all(sql, [], (err, rows) => {
 
 // Получение списка заказов
 app.get('/allfiles', (req, res) => {
-const sql = 'SELECT * FROM Orders';
+const sql = 'SELECT * FROM Files';
 db.all(sql, [], (err, rows) => {
   if (err) {
     console.error('Ошибка получения заказов:', err.message);
