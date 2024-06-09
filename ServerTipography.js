@@ -29,30 +29,24 @@ const storage = multer.diskStorage({
     cb(null, 'uploads/');
   },
   filename: (req, file, cb) => {
-    // Преобразуем имя файла в корректную кодировку
     const originalName = Buffer.from(file.originalname, 'latin1').toString('utf8');
     cb(null, originalName);
   }
 });
-
 const uploads = multer({ storage: storage }); // Загруженные файлы будут сохраняться в папку 'uploads/'
 
-// Загрузка файлов
 app.post('/upload', authenticateToken, uploads.single('file'), (req, res) => {
-  console.log('Файл загружен:', req.file);
   const file = req.file;
   const userId = req.user.userID;
   const orderDate = new Date().toISOString().split('T')[0];
 
   if (!file) {
-    console.log('Файл не загружен');
     return res.status(400).send('Файл не загружен');
   }
 
   db.serialize(() => {
     db.run(`INSERT INTO Files (FileName, FilePath) VALUES (?, ?)`, [file.originalname, file.path], function (err) {
       if (err) {
-        console.log('Ошибка записи в таблицу Files:', err.message);
         return res.status(500).send('Ошибка записи в таблицу Files');
       }
 
@@ -60,7 +54,6 @@ app.post('/upload', authenticateToken, uploads.single('file'), (req, res) => {
 
       db.run(`INSERT INTO Orders (UserID, OrderDate, StatusID, OrderPrice) VALUES (?, ?, ?, ?)`, [userId, orderDate, 1, 35], function (err) {
         if (err) {
-          console.log('Ошибка записи в таблицу Orders:', err.message);
           return res.status(500).send('Ошибка записи в таблицу Orders');
         }
 
@@ -68,7 +61,6 @@ app.post('/upload', authenticateToken, uploads.single('file'), (req, res) => {
 
         db.run(`INSERT INTO OrderFiles (OrderID, FileID) VALUES (?, ?)`, [orderId, fileId], function (err) {
           if (err) {
-            console.log('Ошибка записи в таблицу OrderFiles:', err.message);
             return res.status(500).send('Ошибка записи в таблицу OrderFiles');
           }
 
@@ -112,7 +104,7 @@ app.get('/orderswithfiles', (req, res) => {
 });
 
 // Возвращение информации о файле по ID
-app.get('/files/:id', (req, res) => {
+/*app.get('/files/:id', (req, res) => {
 const fileId = req.params.id;
 const sql = 'SELECT * FROM Files WHERE FileID = ?';
 db.get(sql, [fileId], (err, row) => {
@@ -123,6 +115,22 @@ db.get(sql, [fileId], (err, row) => {
     res.json(row);
   }
 });
+});*/
+app.get('/files/:fileId', (req, res) => {
+  const fileId = req.params.fileId;
+  db.get(`SELECT FilePath FROM Files WHERE FileID = ?`, [fileId], (err, row) => {
+      if (err) {
+          res.status(500).send('Ошибка сервера');
+          return;
+      }
+      if (!row) {
+          res.status(404).send('Файл не найден');
+          return;
+      }
+      const filePath = row.FilePath;
+      const fileUrl = `https://test-bri6.onrender.com/uploads/${path.basename(filePath)}`;
+      res.json({ fileUrl: fileUrl });
+  });
 });
 
 // Endpoint для регистрации работника
