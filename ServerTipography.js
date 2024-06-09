@@ -117,21 +117,27 @@ db.get(sql, [fileId], (err, row) => {
 });
 });*/
 app.get('/files/:fileId', (req, res) => {
-  const fileId = req.params.fileId;
-  db.get(`SELECT FilePath FROM Files WHERE FileID = ?`, [fileId], (err, row) => {
-      if (err) {
-          res.status(500).send('Ошибка сервера');
-          return;
-      }
-      if (!row) {
-          res.status(404).send('Файл не найден');
-          return;
-      }
-      const filePath = row.FilePath;
-      const fileUrl = `https://test-bri6.onrender.com/uploads/${path.basename(filePath)}`;
-      res.json({ fileUrl: fileUrl });
-  });
+    const fileId = req.params.fileId;
+    db.get(`SELECT FilePath FROM Files WHERE FileID = ?`, [fileId], (err, row) => {
+        if (err) {
+            res.status(500).send('Ошибка сервера');
+            return;
+        }
+        if (!row) {
+            res.status(404).send('Файл не найден');
+            return;
+        }
+        const filePath = row.FilePath;
+        if (!filePath) {
+            res.status(404).send('Файл не найден');
+            return;
+        }
+        // Здесь создаем правильный URL для файла
+        const fileUrl = `https://test-bri6.onrender.com/uploads/${path.basename(filePath)}`;
+        res.json({ fileUrl: fileUrl });
+    });
 });
+
 
 // Endpoint для регистрации работника
 app.post('/users/register', (req, res) => {
