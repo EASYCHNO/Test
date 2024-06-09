@@ -37,10 +37,8 @@ const storage = multer.diskStorage({
 
 const uploads = multer({ storage: storage }); // Загруженные файлы будут сохраняться в папку 'uploads/'
 
-
-
 // Загрузка файлов
-app.post('/upload', authenticateToken, upload.single('file'), (req, res) => {
+app.post('/upload', authenticateToken, uploads.single('file'), (req, res) => {
   console.log('Файл загружен:', req.file);
   const file = req.file;
   const userId = req.user.userID;
@@ -78,19 +76,6 @@ app.post('/upload', authenticateToken, upload.single('file'), (req, res) => {
         });
       });
     });
-  });
-});
-
-app.get('/file/:filename', authenticateToken, (req, res) => {
-  const filename = req.params.filename;
-  const relativePath = path.join('uploads', filename);
-  const absolutePath = path.resolve(relativePath);
-
-  res.sendFile(absolutePath, (err) => {
-    if (err) {
-      console.log('Ошибка при отправке файла:', err);
-      res.status(404).send('Файл не найден');
-    }
   });
 });
 
