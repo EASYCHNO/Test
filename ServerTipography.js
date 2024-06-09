@@ -29,7 +29,9 @@ const storage = multer.diskStorage({
     cb(null, 'uploads/');
   },
   filename: (req, file, cb) => {
-    cb(null, file.originalname);
+    // Преобразуем имя файла в корректную кодировку
+    const originalName = Buffer.from(file.originalname, 'latin1').toString('utf8');
+    cb(null, originalName);
   }
 });
 
@@ -38,7 +40,7 @@ const uploads = multer({ storage: storage }); // Загруженные файл
 
 
 // Загрузка файлов
-app.post('/upload', authenticateToken, uploads.single('file'), (req, res) => {
+app.post('/upload', authenticateToken, upload.single('file'), (req, res) => {
   console.log('Файл загружен:', req.file);
   const file = req.file;
   const userId = req.user.userID;
@@ -76,6 +78,19 @@ app.post('/upload', authenticateToken, uploads.single('file'), (req, res) => {
         });
       });
     });
+  });
+});
+
+app.get('/file/:filename', authenticateToken, (req, res) => {
+  const filename = req.params.filename;
+  const relativePath = path.join('uploads', filename);
+  const absolutePath = path.resolve(relativePath);
+
+  res.sendFile(absolutePath, (err) => {
+    if (err) {
+      console.log('Ошибка при отправке файла:', err);
+      res.status(404).send('Файл не найден');
+    }
   });
 });
 
