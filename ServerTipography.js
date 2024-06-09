@@ -117,25 +117,30 @@ db.get(sql, [fileId], (err, row) => {
 });
 });*/
 app.get('/files/:fileId', (req, res) => {
-    const fileId = req.params.fileId;
-    db.get(`SELECT FilePath FROM Files WHERE FileID = ?`, [fileId], (err, row) => {
-        if (err) {
-            res.status(500).send('Ошибка сервера');
-            return;
-        }
-        if (!row) {
-            res.status(404).send('Файл не найден');
-            return;
-        }
-        const filePath = row.FilePath;
-        if (!filePath) {
-            res.status(404).send('Файл не найден');
-            return;
-        }
-        // Здесь создаем правильный URL для файла
-        const fileUrl = `https://test-bri6.onrender.com/uploads/${path.basename(filePath)}`;
-        res.json({ fileUrl: fileUrl });
-    });
+  const fileID = req.params.fileID;
+  db.get(`SELECT FilePath FROM Files WHERE FileID = ?`, [fileID], (err, row) => {
+      if (err) {
+          res.status(500).send('Ошибка сервера');
+          return;
+      }
+      if (!row) {
+          res.status(404).send('Файл не найден');
+          return;
+      }
+      const filePath = row.FilePath;
+      if (!filePath) {
+          res.status(404).send('Файл не найден');
+          return;
+      }
+      // Проверяем, существует ли файл
+      if (!fs.existsSync(filePath)) {
+          res.status(404).send('Файл не существует на сервере');
+          return;
+      }
+      // Создаем правильный URL для файла
+      const fileUrl = `https://test-bri6.onrender.com/uploads/${path.basename(filePath)}`;
+      res.json({ fileUrl: fileUrl });
+  });
 });
 
 
