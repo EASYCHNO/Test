@@ -79,6 +79,8 @@ app.post('/upload', authenticateToken, uploads.single('file'), (req, res) => {
   });
 });
 
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+
 // Чтение списка файлов
 app.get('/files', (req, res) => {
   fs.readdir('uploads/', (err, files) => {
@@ -130,6 +132,9 @@ app.get('/files/:id', (req, res) => {
       return;
     }
     
+    // Преобразование относительного пути в абсолютный URL
+    row.FilePath = `${req.protocol}://${req.get('host')}/uploads/${path.basename(row.FilePath)}`;
+
     console.log(`Информация о файле с ID ${fileId} успешно получена:`, row);
     res.json(row);
   });
