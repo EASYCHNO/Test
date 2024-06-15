@@ -66,7 +66,6 @@ app.post('/upload', authenticateToken, uploads.single('file'), (req, res) => {
 
         db.run(`INSERT INTO OrderFiles (OrderID, FileID) VALUES (?, ?)`, [orderId, fileId], function (err) {
           if (err) {
-
             console.error('Ошибка записи в таблицу OrderFiles:', err.message);
             return res.status(500).send('Ошибка записи в таблицу OrderFiles');
           }
@@ -79,9 +78,10 @@ app.post('/upload', authenticateToken, uploads.single('file'), (req, res) => {
   });
 });
 
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // Чтение списка файлов
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+
 app.get('/files', (req, res) => {
   fs.readdir('uploads/', (err, files) => {
     if (err) {
@@ -91,6 +91,7 @@ app.get('/files', (req, res) => {
     res.send(files);
   });
 });
+
 
 // Получение списка заказов с файлами
 app.get('/orderswithfiles', (req, res) => {
@@ -133,12 +134,12 @@ app.get('/files/:id', (req, res) => {
     }
     
     // Преобразование относительного пути в абсолютный URL
-    row.FilePath = `${req.protocol}://${req.get('host')}/uploads/${path.basename(row.FilePath)}`;
-
+    row.FilePath = `${req.protocol}://${req.get('host')}/uploads/${encodeURIComponent(path.basename(row.FilePath))}`;
     console.log(`Информация о файле с ID ${fileId} успешно получена:`, row);
     res.json(row);
   });
 });
+
 /*app.get('/files/:id', (req, res) => {
   const fileId = req.params.id;
   db.get(`SELECT FilePath FROM Files WHERE FileID = ?`, [fileId], (err, row) => {
