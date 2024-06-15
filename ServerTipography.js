@@ -119,54 +119,26 @@ app.get('/orderswithfiles', (req, res) => {
 app.get('/files/:id', (req, res) => {
   const fileId = req.params.id;
   const sql = 'SELECT * FROM Files WHERE FileID = ?';
-  
+
   db.get(sql, [fileId], (err, row) => {
     if (err) {
       console.error('Ошибка получения информации о файле:', err.message);
       res.status(500).json({ error: 'Внутренняя ошибка сервера' });
       return;
     }
-    
+
     if (!row) {
       console.warn(`Файл с ID ${fileId} не найден.`);
       res.status(404).json({ error: 'Файл не найден' });
       return;
     }
-    
+
     // Преобразование относительного пути в абсолютный URL
     row.FilePath = `${req.protocol}://${req.get('host')}/uploads/${encodeURIComponent(path.basename(row.FilePath))}`;
     console.log(`Информация о файле с ID ${fileId} успешно получена:`, row);
-    res.json(row);
+    res.json(row); // Убедитесь, что данные отправляются в кодировке utf-8
   });
 });
-
-/*app.get('/files/:id', (req, res) => {
-  const fileId = req.params.id;
-  db.get(`SELECT FilePath FROM Files WHERE FileID = ?`, [fileId], (err, row) => {
-      if (err) {
-          res.status(500).send('Ошибка сервера');
-          return;
-      }
-      if (!row) {
-          res.status(404).send('Файл не найден');
-          return;
-      }
-      const filePath = row.FilePath;
-      if (!filePath) {
-          res.status(404).send('Файл не найден');
-          return;
-      }
-      // Проверяем, существует ли файл
-      if (!fs.existsSync(filePath)) {
-          res.status(404).send('Файл не существует на сервере');
-          return;
-      }
-      // Создаем правильный URL для файла
-      const fileUrl = `file:///uploads/${path.basename(filePath)}`;
-      res.json({ fileUrl: fileUrl });
-  });
-});*/
-
 
 // Endpoint для регистрации работника
 app.post('/users/register', (req, res) => {
