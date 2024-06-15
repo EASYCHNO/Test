@@ -113,7 +113,7 @@ app.get('/orderswithfiles', (req, res) => {
 });
 
 // Возвращение информации о файле по ID
-/*app.get('/files/:id', (req, res) => {
+app.get('/files/:id', (req, res) => {
   const fileId = req.params.id;
   const sql = 'SELECT * FROM Files WHERE FileID = ?';
   
@@ -133,8 +133,8 @@ app.get('/orderswithfiles', (req, res) => {
     console.log(`Информация о файле с ID ${fileId} успешно получена:`, row);
     res.json(row);
   });
-});*/
-app.get('/files/:id', (req, res) => {
+});
+/*app.get('/files/:id', (req, res) => {
   const fileId = req.params.id;
   db.get(`SELECT FilePath FROM Files WHERE FileID = ?`, [fileId], (err, row) => {
       if (err) {
@@ -159,7 +159,7 @@ app.get('/files/:id', (req, res) => {
       const fileUrl = `file:///uploads/${path.basename(filePath)}`;
       res.json({ fileUrl: fileUrl });
   });
-});
+});*/
 
 
 // Endpoint для регистрации работника
