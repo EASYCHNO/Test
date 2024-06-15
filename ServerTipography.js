@@ -48,23 +48,30 @@ app.post('/upload', authenticateToken, uploads.single('file'), (req, res) => {
   db.serialize(() => {
     db.run(`INSERT INTO Files (FileName, FilePath) VALUES (?, ?)`, [file.originalname, file.path], function (err) {
       if (err) {
+        console.error('Ошибка записи в таблицу Files:', err.message);
         return res.status(500).send('Ошибка записи в таблицу Files');
       }
 
       const fileId = this.lastID;
+      console.log(`Файл записан в таблицу Files с ID: ${fileId}`);
 
       db.run(`INSERT INTO Orders (UserID, OrderDate, StatusID, OrderPrice) VALUES (?, ?, ?, ?)`, [userId, orderDate, 1, 35], function (err) {
         if (err) {
+          console.error('Ошибка записи в таблицу Orders:', err.message);
           return res.status(500).send('Ошибка записи в таблицу Orders');
         }
 
         const orderId = this.lastID;
+        console.log(`Заказ записан в таблицу Orders с ID: ${orderId}`);
 
         db.run(`INSERT INTO OrderFiles (OrderID, FileID) VALUES (?, ?)`, [orderId, fileId], function (err) {
           if (err) {
+
+            console.error('Ошибка записи в таблицу OrderFiles:', err.message);
             return res.status(500).send('Ошибка записи в таблицу OrderFiles');
           }
 
+          console.log('Файл успешно загружен и заказ оформлен.');
           res.send('Файл успешно загружен и заказ оформлен.');
         });
       });
@@ -99,6 +106,7 @@ app.get('/orderswithfiles', (req, res) => {
       console.error('Ошибка получения данных о заказах с файлами:', err.message);
       res.status(500).json({ error: 'Внутренняя ошибка сервера' });
     } else {
+      console.log('Заказы с файлами успешно получены:', rows);
       res.json(rows);
     }
   });
@@ -106,16 +114,25 @@ app.get('/orderswithfiles', (req, res) => {
 
 // Возвращение информации о файле по ID
 app.get('/files/:id', (req, res) => {
-const fileId = req.params.id;
-const sql = 'SELECT * FROM Files WHERE FileID = ?';
-db.get(sql, [fileId], (err, row) => {
-  if (err) {
-    console.error('Ошибка получения информации о файле:', err.message);
-    res.status(500).json({ error: 'Внутренняя ошибка сервера' });
-  } else {
+  const fileId = req.params.id;
+  const sql = 'SELECT * FROM Files WHERE FileID = ?';
+  
+  db.get(sql, [fileId], (err, row) => {
+    if (err) {
+      console.error('Ошибка получения информации о файле:', err.message);
+      res.status(500).json({ error: 'Внутренняя ошибка сервера' });
+      return;
+    }
+    
+    if (!row) {
+      console.warn(`Файл с ID ${fileId} не найден.`);
+      res.status(404).json({ error: 'Файл не найден' });
+      return;
+    }
+    
+    console.log(`Информация о файле с ID ${fileId} успешно получена:`, row);
     res.json(row);
-  }
-});
+  });
 });
 /*app.get('/files/:id', (req, res) => {
   const fileId = req.params.id;
@@ -333,15 +350,16 @@ db.run(sql, params, function (err) {
 
 // Получение списка заказов
 app.get('/orders', (req, res) => {
-const sql = 'SELECT * FROM Orders';
-db.all(sql, [], (err, rows) => {
-  if (err) {
-    console.error('Ошибка получения заказов:', err.message);
-    res.status(500).json({ error: 'Внутренняя ошибка сервера' });
-  } else {
-    res.json(rows);
-  }
-});
+  const sql = 'SELECT * FROM Orders';
+  db.all(sql, [], (err, rows) => {
+    if (err) {
+      console.error('Ошибка получения заказов:', err.message);
+      res.status(500).json({ error: 'Внутренняя ошибка сервера' });
+    } else {
+      console.log('Заказы успешно получены:', rows);
+      res.json(rows);
+    }
+  });
 });
 
 // Получение списка заказов
