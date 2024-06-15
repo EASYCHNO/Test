@@ -23,17 +23,18 @@ const db = new sqlite3.Database('./Test.db', (err) => {
 
 const SECRET_KEY = 'sunyaevkey';
 
-// Настройка multer для сохранения файлов
+// Настройка хранилища Multer
 const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, 'uploads/');
+  destination: function (req, file, cb) {
+      cb(null, 'uploads/'); // Путь для сохранения файлов
   },
-  filename: (req, file, cb) => {
-    const originalName = Buffer.from(file.originalname, 'latin1').toString('utf8');
-    cb(null, originalName);
+  filename: function (req, file, cb) {
+      cb(null, file.originalname);
   }
 });
-const uploads = multer({ storage: storage }); // Загруженные файлы будут сохраняться в папку 'uploads/'
+
+const uploads = multer({ storage: storage });
+
 
 app.post('/upload', authenticateToken, uploads.single('file'), (req, res) => {
   const file = req.file;
@@ -104,7 +105,7 @@ app.get('/orderswithfiles', (req, res) => {
 });
 
 // Возвращение информации о файле по ID
-/*app.get('/files/:id', (req, res) => {
+app.get('/files/:id', (req, res) => {
 const fileId = req.params.id;
 const sql = 'SELECT * FROM Files WHERE FileID = ?';
 db.get(sql, [fileId], (err, row) => {
@@ -115,10 +116,10 @@ db.get(sql, [fileId], (err, row) => {
     res.json(row);
   }
 });
-});*/
-app.get('/files/:fileId', (req, res) => {
-  const fileID = req.params.fileID;
-  db.get(`SELECT FilePath FROM Files WHERE FileID = ?`, [fileID], (err, row) => {
+});
+/*app.get('/files/:fileId', (req, res) => {
+  const fileId = req.params.fileId;
+  db.get(`SELECT FilePath FROM Files WHERE FileID = ?`, [fileId], (err, row) => {
       if (err) {
           res.status(500).send('Ошибка сервера');
           return;
@@ -138,10 +139,10 @@ app.get('/files/:fileId', (req, res) => {
           return;
       }
       // Создаем правильный URL для файла
-      const fileUrl = `https://test-bri6.onrender.com/uploads/${path.basename(filePath)}`;
+      const fileUrl = `https://test-bri6.onrender.com/uploads/${path.originalname(filePath)}`;
       res.json({ fileUrl: fileUrl });
   });
-});
+});*/
 
 
 // Endpoint для регистрации работника
