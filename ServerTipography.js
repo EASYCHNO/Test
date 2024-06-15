@@ -156,7 +156,7 @@ app.get('/files/:id', (req, res) => {
           return;
       }
       // Создаем правильный URL для файла
-      const fileUrl = `file:///${path.originalname(filePath)}`;
+      const fileUrl = `file:///${path.basename(filePath)}`;
       res.json({ fileUrl: fileUrl });
   });
 });
