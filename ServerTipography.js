@@ -117,8 +117,8 @@ db.get(sql, [fileId], (err, row) => {
   }
 });
 });
-/*app.get('/files/:fileId', (req, res) => {
-  const fileId = req.params.fileId;
+/*app.get('/files/:id', (req, res) => {
+  const fileId = req.params.id;
   db.get(`SELECT FilePath FROM Files WHERE FileID = ?`, [fileId], (err, row) => {
       if (err) {
           res.status(500).send('Ошибка сервера');
