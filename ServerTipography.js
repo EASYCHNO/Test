@@ -40,7 +40,7 @@ const storage = multer.diskStorage({
 const uploads = multer({ storage: storage });
 
 
-app.post('/upload', authenticateToken, uploads.single('file'), (req, res) => {
+app.post('/upload', authenticateToken, upload.single('file'), (req, res) => {
   const file = req.file;
   const userId = req.user.userID;
   const orderDate = new Date().toISOString().split('T')[0];
@@ -49,19 +49,24 @@ app.post('/upload', authenticateToken, uploads.single('file'), (req, res) => {
     return res.status(400).send('Файл не загружен');
   }
 
-  const decodedFileName = file.originalname; // Оригинальное имя файла
+  // Оригинальное имя файла
+  const originalFileName = file.originalname;
+  // Декодированное имя файла
+  const decodedFileName = decodeURIComponent(escape(originalFileName));
   const newPath = path.join('uploads', decodedFileName);
 
+  // Переименование файла на сервере с оригинальным именем
   fs.rename(file.path, newPath, (err) => {
     if (err) {
       console.error('Ошибка при переименовании файла:', err.message);
       return res.status(500).send('Ошибка при переименовании файла');
     }
 
-    const fileUrl = `http://test-bri6.onrender.com/uploads/${decodedFileName}`; // Создание URL без кодирования
+    // Формирование URL с кодированием имени файла
+    const fileUrl = `http://test-bri6.onrender.com/uploads/${encodeURIComponent(decodedFileName)}`;
 
     db.serialize(() => {
-      db.run(`INSERT INTO Files (FileName, FilePath) VALUES (?, ?)`, [decodedFileName, fileUrl], function (err) {
+      db.run(`INSERT INTO Files (FileName, FilePath) VALUES (?, ?)`, [originalFileName, fileUrl], function (err) {
         if (err) {
           console.error('Ошибка записи в таблицу Files:', err.message);
           return res.status(500).send('Ошибка записи в таблицу Files');
@@ -93,6 +98,7 @@ app.post('/upload', authenticateToken, uploads.single('file'), (req, res) => {
     });
   });
 });
+
 
 // Чтение списка файлов
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
