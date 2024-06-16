@@ -50,7 +50,6 @@ app.post('/upload', authenticateToken, uploads.single('file'), (req, res) => {
   }
 
   const decodedFileName = decodeURIComponent(escape(file.originalname)); // Декодирование имени файла
-
   const newPath = path.join('uploads', decodedFileName);
 
   fs.rename(file.path, newPath, (err) => {
@@ -59,8 +58,10 @@ app.post('/upload', authenticateToken, uploads.single('file'), (req, res) => {
       return res.status(500).send('Ошибка при переименовании файла');
     }
 
+    const fileUrl = `http://test-bri6.onrender.com/uploads/${encodeURIComponent(decodedFileName)}`; // Создание URL с кодированием
+
     db.serialize(() => {
-      db.run(`INSERT INTO Files (FileName, FilePath) VALUES (?, ?)`, [decodedFileName, newPath], function (err) {
+      db.run(`INSERT INTO Files (FileName, FilePath) VALUES (?, ?)`, [decodedFileName, fileUrl], function (err) {
         if (err) {
           console.error('Ошибка записи в таблицу Files:', err.message);
           return res.status(500).send('Ошибка записи в таблицу Files');
@@ -92,7 +93,6 @@ app.post('/upload', authenticateToken, uploads.single('file'), (req, res) => {
     });
   });
 });
-
 
 // Чтение списка файлов
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
