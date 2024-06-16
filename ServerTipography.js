@@ -5,7 +5,6 @@ const jwt = require('jsonwebtoken');
 const multer = require('multer');
 const fs = require('fs');
 const path = require('path');
-const decodeURIComponent = require('decode-uri-component');
 const bodyParser = require('body-parser');
 const app = express();
 const PORT = 3000;
@@ -37,7 +36,7 @@ const storage = multer.diskStorage({
 const uploads = multer({ storage: storage });
 
 
-app.post('/upload', authenticateToken, upload.single('file'), (req, res) => {
+app.post('/upload', authenticateToken, uploads.single('file'), (req, res) => {
   const file = req.file;
   const userId = req.user.userID;
   const orderDate = new Date().toISOString().split('T')[0];
