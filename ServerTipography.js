@@ -49,7 +49,8 @@ app.post('/upload', authenticateToken, uploads.single('file'), (req, res) => {
   }
 
   const fileName = file.originalname; // Сохранение оригинального названия файла
-  const filePath = `http://test-bri6.onrender.com/uploads/${fileName}`; // Путь к файлу без кодирования
+  const encodedFileName = encodeURIComponent(fileName); // Кодирование названия файла для URL
+  const filePath = `http://test-bri6.onrender.com/uploads/${encodedFileName}`; // Путь к файлу
 
   db.serialize(() => {
     db.run(`INSERT INTO Files (FileName, FilePath) VALUES (?, ?)`, [fileName, filePath], function (err) {
