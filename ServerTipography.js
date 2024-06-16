@@ -29,12 +29,11 @@ const storage = multer.diskStorage({
       cb(null, 'uploads/'); // Путь для сохранения файлов
   },
   filename: function (req, file, cb) {
-      cb(null, file.originalname);
+      cb(null, file.originalname); // Сохраняем оригинальное имя файла
   }
 });
 
 const uploads = multer({ storage: storage });
-
 
 app.post('/upload', authenticateToken, uploads.single('file'), (req, res) => {
   const file = req.file;
@@ -45,10 +44,11 @@ app.post('/upload', authenticateToken, uploads.single('file'), (req, res) => {
     return res.status(400).send('Файл не загружен');
   }
 
-  const decodedFileName = decodeURIComponent(file.originalname);
+  // Нет необходимости в декодировании имени файла
+  const fileName = file.originalname;
 
   db.serialize(() => {
-    db.run(`INSERT INTO Files (FileName, FilePath) VALUES (?, ?)`, [decodedFileName, file.path], function (err) {
+    db.run(`INSERT INTO Files (FileName, FilePath) VALUES (?, ?)`, [fileName, file.path], function (err) {
       if (err) {
         console.error('Ошибка записи в таблицу Files:', err.message);
         return res.status(500).send('Ошибка записи в таблицу Files');
@@ -79,7 +79,6 @@ app.post('/upload', authenticateToken, uploads.single('file'), (req, res) => {
     });
   });
 });
-
 
 // Чтение списка файлов
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
