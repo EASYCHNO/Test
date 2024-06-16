@@ -49,10 +49,11 @@ app.post('/upload', authenticateToken, uploads.single('file'), (req, res) => {
     return res.status(400).send('Файл не загружен');
   }
 
-  const fileName = decodeURIComponent(file.originalname); // Декодирование имени файла
+  const fileName = file.originalname; // Имя файла сохраняется как есть
+  const encodedFilePath = `http://test-bri6.onrender.com/uploads/${encodeURIComponent(fileName)}`; // Кодируем путь к файлу
 
   db.serialize(() => {
-    db.run(`INSERT INTO Files (FileName, FilePath) VALUES (?, ?)`, [fileName, file.path], function (err) {
+    db.run(`INSERT INTO Files (FileName, FilePath) VALUES (?, ?)`, [fileName, encodedFilePath], function (err) {
       if (err) {
         console.error('Ошибка записи в таблицу Files:', err.message);
         return res.status(500).send('Ошибка записи в таблицу Files');
@@ -83,6 +84,7 @@ app.post('/upload', authenticateToken, uploads.single('file'), (req, res) => {
     });
   });
 });
+
 
 // Чтение списка файлов
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
