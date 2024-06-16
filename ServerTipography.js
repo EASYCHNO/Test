@@ -9,6 +9,9 @@ const bodyParser = require('body-parser');
 const app = express();
 const PORT = 3000;
 
+app.use(express.json({ limit: '50mb', type: 'application/json', parameterLimit: 1000000 }));
+app.use(express.urlencoded({ limit: '50mb', extended: true, parameterLimit: 1000000 }));
+
 app.use(bodyParser.json());
 app.use(express.json());
 
@@ -29,7 +32,9 @@ const storage = multer.diskStorage({
       cb(null, 'uploads/'); // Путь для сохранения файлов
   },
   filename: function (req, file, cb) {
-      cb(null, file.originalname); // Сохраняем оригинальное имя файла
+      // Декодирование имени файла
+      const decodedFileName = decodeURIComponent(file.originalname);
+      cb(null, decodedFileName);
   }
 });
 
@@ -44,8 +49,7 @@ app.post('/upload', authenticateToken, uploads.single('file'), (req, res) => {
     return res.status(400).send('Файл не загружен');
   }
 
-  // Нет необходимости в декодировании имени файла
-  const fileName = file.originalname;
+  const fileName = decodeURIComponent(file.originalname); // Декодирование имени файла
 
   db.serialize(() => {
     db.run(`INSERT INTO Files (FileName, FilePath) VALUES (?, ?)`, [fileName, file.path], function (err) {
