@@ -49,10 +49,10 @@ app.post('/upload', authenticateToken, uploads.single('file'), (req, res) => {
   }
 
   const fileName = file.originalname; // Сохранение оригинального названия файла
-  const encodedFilePath = `http://test-bri6.onrender.com/uploads/${encodeURIComponent(fileName)}`; // Кодирование пути к файлу
+  const filePath = `http://test-bri6.onrender.com/uploads/${fileName}`; // Путь к файлу без кодирования
 
   db.serialize(() => {
-    db.run(`INSERT INTO Files (FileName, FilePath) VALUES (?, ?)`, [fileName, encodedFilePath], function (err) {
+    db.run(`INSERT INTO Files (FileName, FilePath) VALUES (?, ?)`, [fileName, filePath], function (err) {
       if (err) {
         console.error('Ошибка записи в таблицу Files:', err.message);
         return res.status(500).send('Ошибка записи в таблицу Files');
