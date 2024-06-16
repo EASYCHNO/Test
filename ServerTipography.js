@@ -39,6 +39,7 @@ const storage = multer.diskStorage({
 
 const uploads = multer({ storage: storage });
 
+
 app.post('/upload', authenticateToken, uploads.single('file'), (req, res) => {
   const file = req.file;
   const userId = req.user.userID;
@@ -48,42 +49,50 @@ app.post('/upload', authenticateToken, uploads.single('file'), (req, res) => {
     return res.status(400).send('Файл не загружен');
   }
 
-  const fileName = file.originalname; // Сохранение оригинального названия файла
-  const encodedFileName = encodeURIComponent(fileName); // Кодирование названия файла для URL
-  const filePath = `http://test-bri6.onrender.com/uploads/${encodedFileName}`; // Путь к файлу
+  const decodedFileName = decodeURIComponent(escape(file.originalname)); // Декодирование имени файла
 
-  db.serialize(() => {
-    db.run(`INSERT INTO Files (FileName, FilePath) VALUES (?, ?)`, [fileName, filePath], function (err) {
-      if (err) {
-        console.error('Ошибка записи в таблицу Files:', err.message);
-        return res.status(500).send('Ошибка записи в таблицу Files');
-      }
+  const newPath = path.join('uploads', decodedFileName);
 
-      const fileId = this.lastID;
-      console.log(`Файл записан в таблицу Files с ID: ${fileId}`);
+  fs.rename(file.path, newPath, (err) => {
+    if (err) {
+      console.error('Ошибка при переименовании файла:', err.message);
+      return res.status(500).send('Ошибка при переименовании файла');
+    }
 
-      db.run(`INSERT INTO Orders (UserID, OrderDate, StatusID, OrderPrice) VALUES (?, ?, ?, ?)`, [userId, orderDate, 1, 35], function (err) {
+    db.serialize(() => {
+      db.run(`INSERT INTO Files (FileName, FilePath) VALUES (?, ?)`, [decodedFileName, newPath], function (err) {
         if (err) {
-          console.error('Ошибка записи в таблицу Orders:', err.message);
-          return res.status(500).send('Ошибка записи в таблицу Orders');
+          console.error('Ошибка записи в таблицу Files:', err.message);
+          return res.status(500).send('Ошибка записи в таблицу Files');
         }
 
-        const orderId = this.lastID;
-        console.log(`Заказ записан в таблицу Orders с ID: ${orderId}`);
+        const fileId = this.lastID;
+        console.log(`Файл записан в таблицу Files с ID: ${fileId}`);
 
-        db.run(`INSERT INTO OrderFiles (OrderID, FileID) VALUES (?, ?)`, [orderId, fileId], function (err) {
+        db.run(`INSERT INTO Orders (UserID, OrderDate, StatusID, OrderPrice) VALUES (?, ?, ?, ?)`, [userId, orderDate, 1, 35], function (err) {
           if (err) {
-            console.error('Ошибка записи в таблицу OrderFiles:', err.message);
-            return res.status(500).send('Ошибка записи в таблицу OrderFiles');
+            console.error('Ошибка записи в таблицу Orders:', err.message);
+            return res.status(500).send('Ошибка записи в таблицу Orders');
           }
 
-          console.log('Файл успешно загружен и заказ оформлен.');
-          res.send('Файл успешно загружен и заказ оформлен.');
+          const orderId = this.lastID;
+          console.log(`Заказ записан в таблицу Orders с ID: ${orderId}`);
+
+          db.run(`INSERT INTO OrderFiles (OrderID, FileID) VALUES (?, ?)`, [orderId, fileId], function (err) {
+            if (err) {
+              console.error('Ошибка записи в таблицу OrderFiles:', err.message);
+              return res.status(500).send('Ошибка записи в таблицу OrderFiles');
+            }
+
+            console.log('Файл успешно загружен и заказ оформлен.');
+            res.send('Файл успешно загружен и заказ оформлен.');
+          });
         });
       });
     });
   });
 });
+
 
 // Чтение списка файлов
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
