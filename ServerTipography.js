@@ -49,8 +49,7 @@ app.post('/upload', authenticateToken, uploads.single('file'), (req, res) => {
   }
 
   const fileName = file.originalname; // Сохранение оригинального названия файла
-  const encodedFileName = encodeURIComponent(fileName); // Кодирование названия файла для URL
-  const filePath = `http://test-bri6.onrender.com/uploads/${encodedFileName}`; // Путь к файлу
+  const filePath = `http://test-bri6.onrender.com/uploads/${encodeURIComponent(fileName)}`; // Путь к файлу
 
   db.serialize(() => {
     db.run(`INSERT INTO Files (FileName, FilePath) VALUES (?, ?)`, [fileName, filePath], function (err) {
@@ -85,8 +84,6 @@ app.post('/upload', authenticateToken, uploads.single('file'), (req, res) => {
   });
 });
 
-
-
 // Чтение списка файлов
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
@@ -99,7 +96,6 @@ app.get('/files', (req, res) => {
     res.send(files);
   });
 });
-
 
 // Получение списка заказов с файлами
 app.get('/orderswithfiles', (req, res) => {
