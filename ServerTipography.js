@@ -40,7 +40,7 @@ const storage = multer.diskStorage({
 const uploads = multer({ storage: storage });
 
 
-app.post('/upload', authenticateToken, upload.single('file'), (req, res) => {
+app.post('/upload', authenticateToken, uploads.single('file'), (req, res) => {
   const file = req.file;
   const userId = req.user.userID;
   const orderDate = new Date().toISOString().split('T')[0];
