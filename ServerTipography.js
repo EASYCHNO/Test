@@ -29,14 +29,13 @@ const SECRET_KEY = 'sunyaevkey';
 // Настройка хранилища Multer
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
-      cb(null, 'uploads/'); // Путь для сохранения файлов
+    cb(null, 'uploads/'); // Путь для сохранения файлов
   },
   filename: function (req, file, cb) {
-      // Декодирование имени файла
-      const decodedFileName = decodeURIComponent(file.originalname);
-      cb(null, decodedFileName);
+    cb(null, file.originalname); // Использование оригинального названия файла
   }
 });
+
 
 const uploads = multer({ storage: storage });
 
@@ -49,8 +48,8 @@ app.post('/upload', authenticateToken, uploads.single('file'), (req, res) => {
     return res.status(400).send('Файл не загружен');
   }
 
-  const fileName = file.originalname; // Имя файла сохраняется как есть
-  const encodedFilePath = `http://test-bri6.onrender.com/uploads/${encodeURIComponent(fileName)}`; // Кодируем путь к файлу
+  const fileName = file.originalname; // Сохранение оригинального названия файла
+  const encodedFilePath = `http://test-bri6.onrender.com/uploads/${encodeURIComponent(fileName)}`; // Кодирование пути к файлу
 
   db.serialize(() => {
     db.run(`INSERT INTO Files (FileName, FilePath) VALUES (?, ?)`, [fileName, encodedFilePath], function (err) {
@@ -84,6 +83,7 @@ app.post('/upload', authenticateToken, uploads.single('file'), (req, res) => {
     });
   });
 });
+
 
 
 // Чтение списка файлов
