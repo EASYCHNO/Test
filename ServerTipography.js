@@ -5,6 +5,7 @@ const jwt = require('jsonwebtoken');
 const multer = require('multer');
 const fs = require('fs');
 const path = require('path');
+const decodeURIComponent = require('decode-uri-component');
 const bodyParser = require('body-parser');
 const app = express();
 const PORT = 3000;
@@ -36,7 +37,7 @@ const storage = multer.diskStorage({
 const uploads = multer({ storage: storage });
 
 
-app.post('/upload', authenticateToken, uploads.single('file'), (req, res) => {
+app.post('/upload', authenticateToken, upload.single('file'), (req, res) => {
   const file = req.file;
   const userId = req.user.userID;
   const orderDate = new Date().toISOString().split('T')[0];
@@ -45,8 +46,10 @@ app.post('/upload', authenticateToken, uploads.single('file'), (req, res) => {
     return res.status(400).send('Файл не загружен');
   }
 
+  const decodedFileName = decodeURIComponent(file.originalname);
+
   db.serialize(() => {
-    db.run(`INSERT INTO Files (FileName, FilePath) VALUES (?, ?)`, [file.originalname, file.path], function (err) {
+    db.run(`INSERT INTO Files (FileName, FilePath) VALUES (?, ?)`, [decodedFileName, file.path], function (err) {
       if (err) {
         console.error('Ошибка записи в таблицу Files:', err.message);
         return res.status(500).send('Ошибка записи в таблицу Files');
