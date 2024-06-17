@@ -360,7 +360,7 @@ app.get('/orders', (req, res) => {
   });
 });
 
-// Получение списка заказов
+// Получение списка файлов
 app.get('/allfiles', (req, res) => {
 const sql = 'SELECT * FROM Files';
 db.all(sql, [], (err, rows) => {
@@ -666,6 +666,27 @@ app.put('/paperinventory', async (req, res) => {
   }
 });
 
+// Endpoint для получения заказов пользователя
+app.get('/client/orders', authenticateToken, (req, res) => {
+  const userID = req.user.userID;
+
+  const sql = `
+    SELECT Orders.OrderID, Files.FileName, Orders.OrderDate, Orders.OrderPrice 
+    FROM Orders
+    JOIN OrderFiles ON Orders.OrderID = OrderFiles.OrderID
+    JOIN Files ON OrderFiles.FileID = Files.FileID
+    WHERE Orders.UserID = ?;
+  `;
+
+  db.all(sql, [userID], (err, orders) => {
+    if (err) {
+      console.log('Ошибка при получении заказов пользователя:', err.message);
+      return res.status(500).send('Ошибка при получении заказов');
+    }
+
+    res.status(200).json(orders);
+  });
+});
 
 // Запуск сервера
 app.listen(PORT, () => {
