@@ -49,10 +49,10 @@ async function getPageCount(filePath) {
     const pdfDoc = await PDFDocument.load(pdfBytes);
     return pdfDoc.getPageCount();
   } else if (ext === '.docx') {
-    const result = await mammoth.convertToHtml({ path: filePath });
+    const result = await mammoth.extractRawText({ path: filePath });
     const text = result.value;
-    const pageCount = Math.ceil(text.length / 524400); 
-    return pageCount;
+    const pages = text.split('\n\n').length; // Оценка на основе разделения по параграфам
+    return pages;
   }
   throw new Error('Unsupported file type');
 }
