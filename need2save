@@ -1,0 +1,1163 @@
+Код главных работающих версий файлов:
+Андроид:
+/////////////////////////////////////
+package com.example.orderprint;
+
+import android.annotation.SuppressLint;
+import android.content.Intent;
+import android.database.Cursor;
+import android.net.Uri;
+import android.os.Bundle;
+import android.provider.OpenableColumns;
+import android.util.Log;
+import android.view.View;
+import android.widget.Button;
+import android.widget.TextView;
+import android.widget.Toast;
+
+import androidx.annotation.Nullable;
+import androidx.appcompat.app.AppCompatActivity;
+
+import org.json.JSONException;
+import org.json.JSONObject;
+
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.net.URLEncoder;
+import java.util.concurrent.TimeUnit;
+
+import okhttp3.Call;
+import okhttp3.Callback;
+import okhttp3.MediaType;
+import okhttp3.MultipartBody;
+import okhttp3.OkHttpClient;
+import okhttp3.Request;
+import okhttp3.RequestBody;
+import okhttp3.Response;
+
+public class MainActivity extends AppCompatActivity {
+
+    private static final int PICK_FILE_REQUEST = 1;
+    private Uri fileUri;
+    private TextView textViewStatus;
+    private OkHttpClient client = new OkHttpClient.Builder()
+            .connectTimeout(30, TimeUnit.SECONDS)
+            .writeTimeout(30, TimeUnit.SECONDS)
+            .readTimeout(30, TimeUnit.SECONDS)
+            .build();
+    private String authToken; // Токен авторизации
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_main);
+
+        // Получение токена после аутентификации
+        authToken = getIntent().getStringExtra("AUTH_TOKEN");
+
+        Button buttonSelect = findViewById(R.id.buttonSelect);
+        Button buttonUpload = findViewById(R.id.buttonUpload);
+        textViewStatus = findViewById(R.id.textViewStatus);
+
+        buttonSelect.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                openFilePicker();
+            }
+        });
+
+        buttonUpload.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                if (fileUri != null) {
+                    uploadFile(fileUri);
+                } else {
+                    textViewStatus.setText("Сначала выберите файл");
+                }
+            }
+        });
+    }
+
+    private void openFilePicker() {
+        Intent intent = new Intent(Intent.ACTION_GET_CONTENT);
+        intent.setType("*/*");
+        startActivityForResult(intent, PICK_FILE_REQUEST);
+    }
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, @Nullable Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode == PICK_FILE_REQUEST && resultCode == RESULT_OK && data != null) {
+            fileUri = data.getData();
+            textViewStatus.setText("Файл выбран: " + getFileName(fileUri));
+        }
+    }
+
+    @SuppressLint("Range")
+    private String getFileName(Uri uri) {
+        String result = null;
+        if (uri.getScheme().equals("content")) {
+            try (Cursor cursor = getContentResolver().query(uri, null, null, null, null)) {
+                if (cursor != null && cursor.moveToFirst()) {
+                    result = cursor.getString(cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME));
+                }
+            }
+        }
+        if (result == null) {
+            result = uri.getPath();
+            int cut = result.lastIndexOf('/');
+            if (cut != -1) {
+                result = result.substring(cut + 1);
+            }
+        }
+        return result;
+    }
+
+    private void uploadFile(Uri fileUri) {
+        String url = "https://test-bri6.onrender.com/upload";
+        String fileName = getFileName(fileUri);
+        File file = new File(getCacheDir(), fileName);
+
+        try (InputStream inputStream = getContentResolver().openInputStream(fileUri);
+             FileOutputStream outputStream = new FileOutputStream(file)) {
+            byte[] buffer = new byte[1024];
+            int bytesRead;
+            while ((bytesRead = inputStream.read(buffer)) != -1) {
+                outputStream.write(buffer, 0, bytesRead);
+            }
+        } catch (IOException e) {
+            Log.e("File Error", "Ошибка при сохранении файла", e);
+            return;
+        }
+
+        RequestBody requestBody = new MultipartBody.Builder()
+                .setType(MultipartBody.FORM)
+                .addFormDataPart("file", fileName, RequestBody.create(file, MediaType.parse("application/octet-stream")))
+                .build();
+
+        Request request = new Request.Builder()
+                .url(url)
+                .post(requestBody)
+                .addHeader("Authorization", "Bearer " + authToken)
+                .build();
+
+        client.newCall(request).enqueue(new Callback() {
+            @Override
+            public void onFailure(Call call, IOException e) {
+                Log.e("Upload Error", "Ошибка при загрузке файла", e);
+                runOnUiThread(() -> textViewStatus.setText("Ошибка при загрузке файла: " + e.getMessage()));
+            }
+
+            @Override
+            public void onResponse(Call call, Response response) throws IOException {
+                if (!response.isSuccessful()) {
+                    Log.e("Upload Error", "Ошибка сервера: " + response.message());
+                    runOnUiThread(() -> textViewStatus.setText("Ошибка сервера: " + response.message()));
+                } else {
+                    runOnUiThread(() -> textViewStatus.setText("Файл успешно загружен и заказ оформлен"));
+                }
+            }
+        });
+    }
+}
+//////////////////////////////////////////////////
+Сервер:
+const express = require('express');
+const sqlite3 = require('sqlite3').verbose();
+const bcrypt = require('bcrypt');
+const jwt = require('jsonwebtoken');
+const multer = require('multer');
+const fs = require('fs');
+const path = require('path');
+const bodyParser = require('body-parser');
+const app = express();
+const PORT = 3000;
+
+app.use(express.json({ limit: '50mb', type: 'application/json', parameterLimit: 1000000 }));
+app.use(express.urlencoded({ limit: '50mb', extended: true, parameterLimit: 1000000 }));
+
+app.use(bodyParser.json());
+app.use(express.json());
+
+// Подключение к базе данных SQLite
+const db = new sqlite3.Database('./Test.db', (err) => {
+  if (err) {
+    console.error('Ошибка подключения к базе данных:', err.message);
+  } else {
+    console.log('Успешное подключение к базе данных.');
+  }
+});
+
+const SECRET_KEY = 'sunyaevkey';
+
+// Настройка хранилища Multer
+const storage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    cb(null, 'uploads/'); // Путь для сохранения файлов
+  },
+  filename: function (req, file, cb) {
+    cb(null, file.originalname); // Использование оригинального названия файла
+  }
+});
+
+
+const uploads = multer({ storage: storage });
+
+
+app.post('/upload', authenticateToken, uploads.single('file'), (req, res) => {
+  const file = req.file;
+  const userId = req.user.userID;
+  const orderDate = new Date().toISOString().split('T')[0];
+
+  if (!file) {
+    return res.status(400).send('Файл не загружен');
+  }
+
+  const decodedFileName = decodeURIComponent(escape(file.originalname)); // Декодирование имени файла
+
+  const newPath = path.join('uploads', decodedFileName);
+
+  fs.rename(file.path, newPath, (err) => {
+    if (err) {
+      console.error('Ошибка при переименовании файла:', err.message);
+      return res.status(500).send('Ошибка при переименовании файла');
+    }
+
+    db.serialize(() => {
+      db.run(`INSERT INTO Files (FileName, FilePath) VALUES (?, ?)`, [decodedFileName, newPath], function (err) {
+        if (err) {
+          console.error('Ошибка записи в таблицу Files:', err.message);
+          return res.status(500).send('Ошибка записи в таблицу Files');
+        }
+
+        const fileId = this.lastID;
+        console.log(`Файл записан в таблицу Files с ID: ${fileId}`);
+
+        db.run(`INSERT INTO Orders (UserID, OrderDate, StatusID, OrderPrice) VALUES (?, ?, ?, ?)`, [userId, orderDate, 1, 35], function (err) {
+          if (err) {
+            console.error('Ошибка записи в таблицу Orders:', err.message);
+            return res.status(500).send('Ошибка записи в таблицу Orders');
+          }
+
+          const orderId = this.lastID;
+          console.log(`Заказ записан в таблицу Orders с ID: ${orderId}`);
+
+          db.run(`INSERT INTO OrderFiles (OrderID, FileID) VALUES (?, ?)`, [orderId, fileId], function (err) {
+            if (err) {
+              console.error('Ошибка записи в таблицу OrderFiles:', err.message);
+              return res.status(500).send('Ошибка записи в таблицу OrderFiles');
+            }
+
+            console.log('Файл успешно загружен и заказ оформлен.');
+            res.send('Файл успешно загружен и заказ оформлен.');
+          });
+        });
+      });
+    });
+  });
+});
+
+
+// Чтение списка файлов
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+
+app.get('/files', (req, res) => {
+  fs.readdir('uploads/', (err, files) => {
+    if (err) {
+      console.log('Ошибка чтения директории:', err.message);
+      return res.status(500).send('Ошибка чтения директории');
+    }
+    res.send(files);
+  });
+});
+
+// Получение списка заказов с файлами
+app.get('/orderswithfiles', (req, res) => {
+  const sql = `
+    SELECT Orders.OrderID, Users.Login, Orders.OrderDate, OrderStatuses.StatusName, Files.FileName, Files.FilePath, Files.FileID, Users.Surname, Users.Name, Users.Lastname, Orders.OrderPrice
+    FROM Orders 
+    INNER JOIN OrderFiles ON Orders.OrderID = OrderFiles.OrderID
+    INNER JOIN Files ON OrderFiles.FileID = Files.FileID
+    INNER JOIN Users ON Orders.UserID = Users.UserID
+    INNER JOIN OrderStatuses ON Orders.StatusID = OrderStatuses.StatusID
+  `;
+
+  db.all(sql, [], (err, rows) => {
+    if (err) {
+      console.error('Ошибка получения данных о заказах с файлами:', err.message);
+      res.status(500).json({ error: 'Внутренняя ошибка сервера' });
+    } else {
+      console.log('Заказы с файлами успешно получены:', rows);
+      res.json(rows);
+    }
+  });
+});
+
+// Возвращение информации о файле по ID
+app.get('/files/:id', (req, res) => {
+  const fileId = req.params.id;
+  const sql = 'SELECT * FROM Files WHERE FileID = ?';
+
+  db.get(sql, [fileId], (err, row) => {
+    if (err) {
+      console.error('Ошибка получения информации о файле:', err.message);
+      res.status(500).json({ error: 'Внутренняя ошибка сервера' });
+      return;
+    }
+
+    if (!row) {
+      console.warn(`Файл с ID ${fileId} не найден.`);
+      res.status(404).json({ error: 'Файл не найден' });
+      return;
+    }
+
+    // Преобразование относительного пути в абсолютный URL
+    row.FilePath = `${req.protocol}://${req.get('host')}/uploads/${encodeURIComponent(path.basename(row.FilePath))}`;
+    console.log(`Информация о файле с ID ${fileId} успешно получена:`, row);
+    res.json(row); // Убедитесь, что данные отправляются в кодировке utf-8
+  });
+});
+
+// Endpoint для регистрации работника
+app.post('/users/register', (req, res) => {
+  const { surname, name, lastname, email, login, password, roleID } = req.body;
+
+  console.log("Регистрационные данные:", req.body); // Логируем полученные данные
+
+  if (!surname || !name || !lastname || !email || !login || !password || !roleID) {
+      console.log('Необходимо заполнить все поля для регистрации');
+      return res.status(400).send('Необходимо заполнить все поля для регистрации');
+  }
+
+  // Хэширование пароля с использованием bcrypt
+  const saltRounds = 10;
+  const hashedPassword = bcrypt.hashSync(password, saltRounds);
+
+  const sql = `INSERT INTO Users (Surname, Name, Lastname, Email, Login, Password, RoleID) 
+               VALUES (?, ?, ?, ?, ?, ?, ?)`;
+  db.run(sql, [surname, name, lastname, email, login, hashedPassword, roleID], function(err) {
+      if (err) {
+          console.log('Ошибка при регистрации пользователя:', err.message);
+          return res.status(500).send('Ошибка при регистрации пользователя');
+      }
+      res.status(200).send('Пользователь успешно зарегистрирован');
+  });
+});
+
+// Endpoint для входа работника
+app.post('/users/login', (req, res) => {
+  const { login, password, roleID } = req.body;
+
+  if (!login || !password) {
+      console.log('Необходимо заполнить все поля для входа');
+      return res.status(400).send('Необходимо заполнить все поля для входа');
+  }
+
+  const sql = `SELECT * FROM Users WHERE Login = ?`;
+  db.get(sql, [login], (err, user) => {
+      if (err) {
+          console.log('Ошибка при входе пользователя:', err.message);
+          return res.status(500).send('Ошибка при входе пользователя');
+      }
+
+      if (!user) {
+          console.log('Неверный логин или пароль');
+          return res.status(400).send('Неверный логин или пароль');
+      }
+
+      // Проверка пароля с использованием bcrypt
+      console.log('Проверка пароля для пользователя:', user);
+      console.log('Введенный пароль:', password);
+      console.log('Хэшированный пароль пользователя:', user.Password);
+      
+      // Добавим проверку на существование пароля в БД
+      if (!user.Password) {
+          console.log('Пароль пользователя отсутствует в базе данных');
+          return res.status(400).send('Неверный логин или пароль');
+      }
+
+      const isMatch = bcrypt.compareSync(password, user.Password);
+      if (!isMatch) {
+          console.log('Неверный логин или пароль');
+          return res.status(400).send('Неверный логин или пароль');
+      }
+
+      if (user.RoleID != 2){
+        console.log('Пользователь не имеет доступа к программе для работников')
+        return res.status(400).send('Нет доступа к программе для работников');
+      }
+
+      res.status(200).json(user);
+  });
+});
+
+
+// Endpoint для регистрации клиента
+app.post('/client/register', (req, res) => {
+  console.log("Регистрационные данные:", req.body);
+  const { surname, name, lastname, email, login, password, roleID } = req.body;
+
+  if (!surname || !name || !lastname || !email || !login || !password || !roleID) {
+      console.log('Необходимо заполнить все поля для регистрации');
+      return res.status(400).send('Необходимо заполнить все поля для регистрации');
+  }
+
+  const saltRounds = 10;
+  const hashedPassword = bcrypt.hashSync(password, saltRounds);
+
+  const sql = `INSERT INTO Users (Surname, Name, Lastname, Email, Login, Password, RoleID) 
+               VALUES (?, ?, ?, ?, ?, ?, ?)`;
+  db.run(sql, [surname, name, lastname, email, login, hashedPassword, roleID], function(err) {
+      if (err) {
+          console.log('Ошибка при регистрации пользователя:', err.message);
+          return res.status(500).send('Ошибка при регистрации пользователя');
+      }
+      res.status(200).send('Пользователь успешно зарегистрирован');
+  });
+});
+
+// Маршрут для аутентификации клиента
+app.post('/client/login', (req, res) => {
+  const { login, password } = req.body;
+
+  if (!login || !password) {
+      console.log('Необходимо заполнить все поля для входа');
+      return res.status(400).send('Необходимо заполнить все поля для входа');
+  }
+
+  const sql = `SELECT * FROM Users WHERE Login = ?`;
+  db.get(sql, [login], (err, user) => {
+      if (err) {
+          console.log('Ошибка при входе пользователя:', err.message);
+          return res.status(500).send('Ошибка при входе пользователя');
+      }
+
+      if (!user) {
+          console.log('Неверный логин или пароль');
+          return res.status(400).send('Неверный логин или пароль');
+      }
+
+      // Проверка пароля с использованием bcrypt
+      console.log('Проверка пароля для пользователя:', user);
+      console.log('Введенный пароль:', password);
+      console.log('Хэшированный пароль пользователя:', user.Password);
+
+      if (!user.Password) {
+          console.log('Пароль пользователя отсутствует в базе данных');
+          return res.status(400).send('Неверный логин или пароль');
+      }
+
+      const isMatch = bcrypt.compareSync(password, user.Password);
+      if (!isMatch) {
+          console.log('Неверный логин или пароль');
+          return res.status(400).send('Неверный логин или пароль');
+      }
+
+      if (user.RoleID != 3) {
+          console.log('Пользователь не имеет доступа к программе для клиентов');
+          return res.status(400).send('Нет доступа к программе для клиентов');
+      }
+
+      // Генерация JWT токена
+      const token = jwt.sign({ userID: user.UserID, roleID: user.RoleID }, SECRET_KEY, { expiresIn: '1h' });
+      res.status(200).json({ token });
+  });
+});
+
+// Middleware для проверки JWT токена и извлечения userId
+function authenticateToken(req, res, next) {
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1];
+
+  if (!token) {
+    console.log('Токен отсутствует');
+    return res.sendStatus(401);
+  }
+
+  jwt.verify(token, SECRET_KEY, (err, user) => {
+    if (err) {
+      console.log('Ошибка верификации токена:', err.message);
+      return res.sendStatus(403);
+    }
+    req.user = user;
+    next();
+  });
+}
+
+app.get('/protected', authenticateToken, (req, res) => {
+  res.send('Доступ к защищенному ресурсу');
+});
+
+
+// Связка файла с заказом
+app.post('/orderfiles', (req, res) => {
+const { OrderID, FileID } = req.body;
+const sql = 'INSERT INTO OrderFiles (OrderID, FileID) VALUES (?, ?)';
+const params = [OrderID, FileID];
+db.run(sql, params, function (err) {
+  if (err) {
+    console.error('Ошибка привязки файла к заказу:', err.message);
+    res.status(500).json({ error: 'Внутренняя ошибка сервера' });
+  } else {
+    res.json({ message: 'Файл успешно привязан к заказу' });
+  }
+});
+});
+
+// Получение списка заказов
+app.get('/orders', (req, res) => {
+  const sql = 'SELECT * FROM Orders';
+  db.all(sql, [], (err, rows) => {
+    if (err) {
+      console.error('Ошибка получения заказов:', err.message);
+      res.status(500).json({ error: 'Внутренняя ошибка сервера' });
+    } else {
+      console.log('Заказы успешно получены:', rows);
+      res.json(rows);
+    }
+  });
+});
+
+// Получение списка заказов
+app.get('/allfiles', (req, res) => {
+const sql = 'SELECT * FROM Files';
+db.all(sql, [], (err, rows) => {
+  if (err) {
+    console.error('Ошибка получения заказов:', err.message);
+    res.status(500).json({ error: 'Внутренняя ошибка сервера' });
+  } else {
+    res.json(rows);
+  }
+});
+});
+
+
+app.post('/order', authenticateToken, (req, res) => {
+  const { fileID, orderDate, statusID, orderPrice } = req.body;
+  const userID = req.user.userID; // Получаем userID из проверенного токена
+
+  if (!userID || !fileID || !orderDate || !statusID) {
+      return res.status(400).send('Необходимо заполнить все поля заказа');
+  }
+
+  const sqlOrder = `INSERT INTO Orders (UserID, OrderDate, StatusID, OrderPrice) VALUES (?, ?, ?, ?)`;
+  db.run(sqlOrder, [userID, orderDate, statusID, orderPrice], function (err) {
+      if (err) {
+          return res.status(500).send('Ошибка при создании заказа');
+      }
+
+      const orderID = this.lastID;
+      const sqlOrderFile = `INSERT INTO OrderFiles (OrderID, FileID) VALUES (?, ?)`;
+      db.run(sqlOrderFile, [orderID, fileID], function (err) {
+          if (err) {
+              return res.status(500).send('Ошибка при добавлении файла к заказу');
+          }
+          res.status(200).send({ orderID: orderID, message: 'Заказ успешно создан' });
+      });
+  });
+});
+
+// Обновление статуса заказа
+app.put('/orders/:id', (req, res) => {
+const orderId = req.params.id;
+const { StatusID } = req.body;
+const sql = 'UPDATE Orders SET StatusID = ? WHERE OrderID = ?';
+const params = [StatusID, orderId];
+db.run(sql, params, function (err) {
+  if (err) {
+    console.error('Ошибка обновления статуса заказа:', err.message);
+    res.status(500).json({ error: 'Внутренняя ошибка сервера' });
+  } else {
+    console.log(`Обновлен статус заказа с ID: ${orderId}`);
+    res.json({ message: 'Статус заказа успешно обновлен' });
+  }
+});
+});
+
+// Получение информации о пользователях
+app.get('/users', (req, res) => {
+const sql = 'SELECT * FROM Users';
+db.all(sql, [], (err, rows) => {
+  if (err) {
+    console.error('Ошибка получения пользователей:', err.message);
+    res.status(500).json({ error: 'Внутренняя ошибка сервера' });
+  } else {
+    res.json(rows);
+  }
+});
+});
+
+// Поиск пользователя по ФИО
+app.post('/users/search', async (req, res) => {
+const { Surname, Name, Lastname } = req.body;
+
+console.log('Полученные данные для поиска:', req.body); // Логирование полученных данных
+
+let conditions = []; // Массив для условия WHERE
+let params = []; // Массив параметров
+
+// Формируем условия WHERE и массив параметров в зависимости от наличия значений
+if (Surname) {
+  conditions.push('Surname LIKE ?');
+  params.push(`%${Surname}%`);
+}
+if (Name) {
+  conditions.push('Name LIKE ?');
+  params.push(`%${Name}%`);
+}
+if (Lastname) {
+  conditions.push('Lastname LIKE ?');
+  params.push(`%${Lastname}%`);
+}
+
+// Если ни одно из полей не предоставлено, возвращаем ошибку
+if (params.length === 0) {
+  return res.status(400).json({ error: 'Не указаны данные для поиска' });
+}
+
+// Формируем запрос с учетом условия WHERE, если есть параметры
+const sql = `
+  SELECT UserID 
+  FROM Users 
+  WHERE ${conditions.join(' AND ')}
+`;
+
+try {
+  const row = await new Promise((resolve, reject) => {
+    db.get(sql, params, (err, row) => {
+      if (err) return reject(err);
+      resolve(row);
+    });
+  });
+
+  res.json({ UserID: row?.UserID || 0 });
+} catch (error) {
+  console.error('Ошибка при поиске пользователя:', error.message);
+  res.status(500).json({ error: 'Внутренняя ошибка сервера' });
+  }
+});
+
+// Добавление нового пользователя
+app.post('/users/add', (req, res) => {
+  const { Surname, Name, Lastname, Login, Password } = req.body;
+
+  console.log('Полученные данные для добавления пользователя:', req.body); // Логирование полученных данных
+
+  // Проверка наличия всех необходимых данных
+  if (!Surname || !Name || !Lastname || !Login || !Password) {
+    console.error('Не все обязательные поля заполнены:', req.body);
+    return res.status(400).json({ error: 'Все поля обязательны для заполнения' });
+  }
+
+  // Хеширование пароля
+  bcrypt.hash(Password, 10, (err, hash) => {
+    if (err) {
+      console.error('Ошибка при хешировании пароля:', err.message);
+      return res.status(500).json({ error: 'Внутренняя ошибка сервера' });
+    }
+
+    // Вставка данных пользователя в базу данных
+    const sql = 'INSERT INTO Users (Surname, Name, Lastname, Login, Password, RoleID) VALUES (?, ?, ?, ?, ?, ?)';
+    const params = [Surname, Name, Lastname, Login, hash, 2]; // Устанавливаем RoleID в значение 2
+    db.run(sql, params, function (err) {
+      if (err) {
+        console.error('Ошибка при добавлении пользователя:', err.message);
+        return res.status(500).json({ error: 'Внутренняя ошибка сервера' });
+      }
+
+      console.log(`Пользователь ${Login} успешно добавлен`);
+      res.json({ UserID: this.lastID });
+    });
+  });
+});
+
+app.post('/localorders', (req, res) => {
+  console.log(req.body);
+
+  const {localFileName, localOrderPrice, ownPaper } = req.body;
+  const currentDate = new Date().toISOString(); // Преобразование в ISO 8601
+  const sql = 'INSERT INTO LocalOrders (LocalFileName, LocalOrderDate, LocalOrderPrice, OwnPaper) VALUES (?, ?, ?, ?)';
+  const params = [localFileName, currentDate, localOrderPrice, ownPaper];
+
+  console.log(sql);
+
+  db.run(sql, params, function (err) {
+    if (err) {
+      console.error('Ошибка создания локального заказа:', err.message);
+      res.status(500).json({ error: 'Внутренняя ошибка сервера' });
+    } else {
+      console.log(`Создан локальный заказ с ID: ${this.lastID}`);
+      res.status(201).json({ message: 'Локальный заказ успешно создан', localOrderID: this.lastID });
+    }
+  });
+});
+
+app.get('/localorders', (req, res) => {
+  const sql = 'SELECT * FROM LocalOrders';
+  db.all(sql, [], (err, rows) => {
+    if (err) {
+      console.error('Ошибка получения локальных заказов:', err.message);
+      res.status(500).json({ error: 'Внутренняя ошибка сервера' });
+    } else {
+      res.json(rows);
+    }
+  });
+});
+
+// Маршрут для получения выборки выполненных заказов
+app.get('/completedordersall', (req, res) => {
+  const startDate = req.query.startDate;
+  const endDate = req.query.endDate;
+
+  const sql = `
+      SELECT
+      c.CompletedOrderID,
+      c.LocalOrderID,
+      c.PrintDate,
+      c.PaperCount,
+      c.TotalPrice,
+      c.IsLocal
+    FROM CompletedOrders c
+    JOIN LocalOrders l ON c.LocalOrderID = l.LocalOrderID
+
+  `;
+
+  db.all(sql, [startDate, endDate], (err, rows) => {
+      if (err) {
+          res.status(500).send({ error: err.message });
+          return;
+      }
+      res.json(rows);
+  });
+});
+
+app.get('/localorders/latest', (req, res) => {
+  const sql = "SELECT LocalOrderID FROM LocalOrders ORDER BY LocalOrderID DESC LIMIT 1";
+
+  db.get(sql, [], (err, row) => {
+      if (err) {
+          res.status(500).send({ error: err.message });
+          return;
+      }
+      res.json(row ? row.LocalOrderID : null);
+  });
+});
+
+
+
+// Маршрут для получения выборки выполненных заказов
+app.get('/completedorders', (req, res) => {
+  const startDate = req.query.startDate;
+  const endDate = req.query.endDate;
+
+  console.log('Запрос на получение выборки выполненных заказов с датами:', startDate, endDate);
+
+  const sql = `
+        SELECT
+        c.CompletedOrderID,
+        c.LocalOrderID,
+        c.PrintDate,
+        c.PaperCount,
+        c.TotalPrice,
+        c.IsLocal
+      FROM CompletedOrders c
+      JOIN LocalOrders l ON c.LocalOrderID = l.LocalOrderID
+      WHERE c.PrintDate BETWEEN ? AND ?
+      `;
+
+  db.all(sql, [startDate, endDate], (err, rows) => {
+      if (err) {
+          console.error('Ошибка при получении выборки выполненных заказов:', err);
+          res.status(500).send({ error: err.message });
+          return;
+      }
+      console.log('Получены данные выборки выполненных заказов:', rows);
+      res.json(rows);
+  });
+});
+
+// Маршрут для сохранения информации о выполненном заказе
+app.post('/completedorders', (req, res) => {
+  const { orderID, localOrderID, printDate, paperCount, totalPrice, isLocal } = req.body;
+
+  console.log('Полученные данные о выполненном заказе:', orderID, localOrderID, printDate, paperCount, totalPrice, isLocal);
+
+  const sql = `
+      INSERT INTO CompletedOrders (OrderID, LocalOrderID, PrintDate, PaperCount, TotalPrice, IsLocal)
+      VALUES (?, ?, ?, ?, ?, ?)
+  `;
+
+  db.run(sql, [orderID, localOrderID, printDate, paperCount, totalPrice, isLocal], function (err) {
+      if (err) {
+          console.error('Ошибка при сохранении информации о выполненном заказе:', err);
+          res.status(500).send({ error: err.message });
+          return;
+      }
+      console.log('Успешно сохранена информация о выполненном заказе:', orderID, localOrderID, printDate, paperCount, totalPrice, isLocal);
+      res.json({ message: 'Заказ успешно сохранен в историю.' });
+  });
+});
+
+app.get('/paperinventory', async (req, res) => {
+  try {
+    console.log('Получен запрос GET /paperinventory'); // Логируем запрос
+    const result = await db.get('SELECT * FROM PaperInventory');
+    console.log('Данные из базы данных:', result); // Логируем полученные данные
+    res.json(result);
+  } catch (error) {
+    console.error('Ошибка при обработке GET /paperinventory:', error); // Логируем ошибку
+    res.status(500).send('Ошибка сервера');
+  }
+});
+
+app.put('/paperinventory', async (req, res) => {
+  try {
+    console.log('Получен запрос PUT /paperinventory', req.body); // Логируем запрос и тело запроса
+    const { newQuantity } = req.body;
+
+    await db.run('UPDATE PaperInventory SET Quantity = ?', [newQuantity]);
+    console.log('Количество бумаги обновлено в базе данных'); // Логируем успешное обновление
+    res.send('Количество бумаги обновлено');
+  } catch (error) {
+    console.error('Ошибка при обработке PUT /paperinventory:', error); // Логируем ошибку
+    res.status(500).send('Ошибка сервера');
+  }
+});
+
+
+// Запуск сервера
+app.listen(PORT, () => {
+  console.log(`Сервер запущен на порту ${PORT}`);
+});
+/////////////////////////////////////////////////
+Главное окно WPF приложения:
+using Newtonsoft.Json;
+using Spire.Pdf;
+using Spire.Pdf.Graphics;
+using Spire.Pdf.Tables;
+using System;
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.Drawing;
+using System.IO;
+using System.Linq;
+using System.Net.Http;
+using System.Net.Http.Json;
+using System.Threading.Tasks;
+using System.Windows;
+using System.Windows.Controls;
+
+namespace LittlePrint
+{
+    public partial class MainWindow : Window
+    {
+        string CurrentURL = Properties.Resources.CurrentURL;
+
+        private User loggedInUser;
+
+        public MainWindow(User user)
+        {
+            InitializeComponent();
+            LoadOrdersWithFilesAsync();
+            LoadLocalOrdersAsync();
+            loggedInUser = user;
+            DisplayUserInfo();
+        }
+
+        private void DisplayUserInfo()
+        {
+            lblUserInfo.Content = $"Работник: {loggedInUser.Surname} {loggedInUser.Name} {loggedInUser.Lastname}";
+        }
+
+        //Загрузка данных о заказах с сервера
+        private async Task LoadOrdersWithFilesAsync()
+        {
+            using (var httpClient = new HttpClient())
+            {
+                try
+                {
+                    var response = await httpClient.GetAsync(CurrentURL + "/orderswithfiles");
+                    response.EnsureSuccessStatusCode();
+
+                    var json = await response.Content.ReadAsStringAsync();
+                    var ordersWithFiles = JsonConvert.DeserializeObject<List<OrderWithFile>>(json);
+
+                    fileDataGrid.ItemsSource = ordersWithFiles;
+                }
+                catch (HttpRequestException ex)
+                {
+                    MessageBox.Show($"Ошибка HTTP запроса: {ex.Message}\nURL: {CurrentURL}/orderswithfiles");
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show($"Произошла ошибка: {ex.Message}");
+                }
+            }
+        }
+
+        private async Task LoadLocalOrdersAsync()
+        {
+            using (var httpClient = new HttpClient())
+            {
+                try
+                {
+                    var response = await httpClient.GetAsync(CurrentURL + "/localorders");
+                    response.EnsureSuccessStatusCode();
+
+                    var json = await response.Content.ReadAsStringAsync();
+                    var localOrders = JsonConvert.DeserializeObject<List<LocalOrders>>(json);
+
+                    localFileDataGrid.ItemsSource = localOrders;
+                }
+                catch (HttpRequestException ex)
+                {
+                    MessageBox.Show($"Ошибка HTTP запроса: {ex.Message}\nURL: {CurrentURL}/localorders");
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show($"Произошла ошибка: {ex.Message}");
+                }
+            }
+        }
+
+        private async void fileDataGrid_MouseDoubleClick(object sender, System.Windows.Input.MouseButtonEventArgs e)
+        {
+            OrderWithFile selectedOrder = (OrderWithFile)fileDataGrid.SelectedItem;
+
+            if (selectedOrder != null)
+            {
+                int fileId = selectedOrder.FileID;
+                string pdfFilePath = await GetPdfFilePathFromServer(fileId);
+
+                if (!string.IsNullOrEmpty(pdfFilePath))
+                {
+                    PrintPreviewWindow detailsWindow = new PrintPreviewWindow(pdfFilePath, selectedOrder.OrderID, selectedOrder);
+
+
+                    // Подписка на событие обновления статуса
+                    detailsWindow.OrderStatusUpdated += async () => await LoadOrdersWithFilesAsync();
+
+                    detailsWindow.Show();
+                }
+            }
+        }
+
+        private async Task<string> GetPdfFilePathFromServer(int fileId)
+        {
+            using (var httpClient = new HttpClient())
+            {
+                try
+                {
+                    var requestUrl = $"{CurrentURL}/files/{fileId}";
+                    Debug.WriteLine($"Отправка запроса на: {requestUrl}");
+
+                    var response = await httpClient.GetAsync(requestUrl);
+                    Debug.WriteLine($"Ответ получен с кодом: {response.StatusCode}");
+                    response.EnsureSuccessStatusCode();
+
+                    var fileData = await response.Content.ReadFromJsonAsync<FileDetails>();
+                    Debug.WriteLine($"Получены данные о файле: {JsonConvert.SerializeObject(fileData)}");
+
+                    if (fileData == null || string.IsNullOrEmpty(fileData.FilePath))
+                    {
+                        MessageBox.Show("Ошибка: данные о файле не найдены или путь к файлу пуст.");
+                        return null;
+                    }
+
+                    // Закодируем URL файла
+                    string absoluteFileUrl = $"{CurrentURL}/uploads/{Uri.EscapeDataString(Path.GetFileName(fileData.FilePath))}";
+                    Debug.WriteLine($"Проверка доступности файла по URL: {absoluteFileUrl}");
+
+                    var fileCheckResponse = await httpClient.GetAsync(absoluteFileUrl);
+                    Debug.WriteLine($"Результат проверки файла: {fileCheckResponse.StatusCode}");
+                    if (!fileCheckResponse.IsSuccessStatusCode)
+                    {
+                        MessageBox.Show($"Произошла ошибка: файл по URL \"{absoluteFileUrl}\" не существует.");
+                        return null;
+                    }
+
+                    string fileExtension = Path.GetExtension(fileData.FilePath).ToLower();
+                    if (fileExtension == ".pdf")
+                    {
+                        return absoluteFileUrl;
+                    }
+                    else if (fileExtension == ".doc" || fileExtension == ".docx")
+                    {
+                        string localDocPath = Path.Combine(Path.GetTempPath(), Path.GetFileName(fileData.FilePath));
+                        string pdfFilePath = Path.Combine(Path.GetTempPath(), Path.ChangeExtension(Path.GetFileName(fileData.FilePath), ".pdf"));
+
+                        // Скачивание файла
+                        Debug.WriteLine($"Скачивание файла из {absoluteFileUrl} в {localDocPath}");
+                        using (var fileResponse = await httpClient.GetAsync(absoluteFileUrl))
+                        {
+                            fileResponse.EnsureSuccessStatusCode();
+                            var fileBytes = await fileResponse.Content.ReadAsByteArrayAsync();
+                            File.WriteAllBytes(localDocPath, fileBytes);
+                        }
+
+                        // Конвертация файла
+                        return ConvertDocToPdf(localDocPath, pdfFilePath);
+                    }
+                    else
+                    {
+                        MessageBox.Show($"Неподдерживаемый формат файла: {fileExtension}");
+                        return null;
+                    }
+                }
+                catch (HttpRequestException ex)
+                {
+                    MessageBox.Show($"Ошибка HTTP запроса: {ex.Message}\nURL: {CurrentURL}/files/{fileId}");
+                    Debug.WriteLine($"Ошибка HTTP запроса: {ex.Message}\nURL: {CurrentURL}/files/{fileId}");
+                    return null;
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show($"Произошла ошибка: {ex.Message}");
+                    Debug.WriteLine($"Произошла ошибка: {ex.Message}");
+                    return null;
+                }
+            }
+        }
+
+
+        private static string ConvertDocToPdf(string inputFilePath, string outputFilePath)
+        {
+            try
+            {
+                Debug.WriteLine($"Начало конвертации файла: {inputFilePath} в {outputFilePath}");
+                Spire.Doc.Document document = new Spire.Doc.Document();
+                document.LoadFromFile(inputFilePath);
+                document.SaveToFile(outputFilePath, Spire.Doc.FileFormat.PDF);
+                Debug.WriteLine($"Документ успешно конвертирован: {outputFilePath}");
+                return outputFilePath;
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Ошибка конвертации файла: {ex.Message}");
+                Debug.WriteLine($"Ошибка конвертации файла: {ex.Message}");
+                return null;
+            }
+        }
+
+
+
+        private void btnLocalChoose_Click(object sender, RoutedEventArgs e)
+        {
+            LocalPrintWindow localPrintWindow = new LocalPrintWindow();
+            localPrintWindow.ShowDialog();
+        }
+
+        private void btnRefresh_Click(object sender, RoutedEventArgs e)
+        {
+            LoadOrdersWithFilesAsync();
+            LoadLocalOrdersAsync();
+            //LoadCompletedOrdersAsync();
+        }
+
+        private async void btnGenerateReport_Click(object sender, RoutedEventArgs e)
+        {
+            ReportWindow reportDialog = new ReportWindow();
+            if (reportDialog.ShowDialog() == true)
+            {
+                // Если диалог закрыт с OK, формируем отчет
+                await GenerateReportAsync(reportDialog.StartDate, reportDialog.EndDate);
+            }
+        }
+
+        private async Task GenerateReportAsync(DateTime startDate, DateTime endDate)
+        {
+            using (var httpClient = new HttpClient())
+            {
+                try
+                {
+                    var response = await httpClient.GetAsync($"{CurrentURL}/completedorders?startDate={startDate:yyyy-MM-dd}&endDate={endDate:yyyy-MM-dd}");
+                    response.EnsureSuccessStatusCode();
+
+                    var json = await response.Content.ReadAsStringAsync();
+                    var completedOrders = JsonConvert.DeserializeObject<List<CompletedOrder>>(json);
+
+                    // Создание PDF-документа
+                    PdfDocument pdf = new PdfDocument();
+                    PdfPageBase page = pdf.Pages.Add();
+
+                    // Добавление данных в PDF
+                    PdfTrueTypeFont font = new PdfTrueTypeFont(new Font("Arial", 12f), true);
+                    PdfStringFormat format = new PdfStringFormat(PdfTextAlignment.Left);
+                    float y = 50;
+
+                    // Заголовок
+                    page.Canvas.DrawString($"Отчет о выполненных заказах за период с {startDate:dd.MM.yyyy} по {endDate:dd.MM.yyyy}", font, PdfBrushes.Black, 50, y, format);
+                    y += 20;
+
+                    // Подсчет общего количества заказов, суммы заказов и количества локальных/нелокальных заказов
+                    int totalOrders = completedOrders.Count;
+                    double totalSum = completedOrders.Sum(o => o.TotalPrice);
+                    int localOrders = completedOrders.Count(o => o.IsLocal);
+                    int nonLocalOrders = totalOrders - localOrders;
+
+                    // Вывод информации перед таблицей
+                    page.Canvas.DrawString($"Всего заказов: {totalOrders}", font, PdfBrushes.Black, 50, y, format);
+                    y += 20;
+                    page.Canvas.DrawString($"Общая сумма заказов: {totalSum:C2}", font, PdfBrushes.Black, 50, y, format);
+                    y += 20;
+                    page.Canvas.DrawString($"Количество локальных заказов: {localOrders}", font, PdfBrushes.Black, 50, y, format);
+                    y += 20;
+                    page.Canvas.DrawString($"Количество онлайн заказов: {nonLocalOrders}", font, PdfBrushes.Black, 50, y, format);
+                    y += 40;
+
+
+                    // Таблица
+                    PdfTable table = new PdfTable();
+                    table.Style.CellPadding = 2;
+                    table.Style.BorderPen = new PdfPen(PdfBrushes.Black, 0.75f);
+                    table.Style.DefaultStyle.Font = new PdfTrueTypeFont(new Font("Arial", 10f), true);
+                    table.Style.AlternateStyle = new PdfCellStyle();
+                    table.Style.AlternateStyle.BackgroundBrush = PdfBrushes.LightGray;
+                    table.Style.AlternateStyle.Font = new PdfTrueTypeFont(new Font("Arial", 10f), true);
+
+                    // Заголовки столбцов
+                    string[] columnHeaders = { "Дата печати", "Количество листов", "Сумма (руб.)", "Тип заказа" };
+                    object[,] data = new object[completedOrders.Count + 1, columnHeaders.Length];
+                    for (int i = 0; i < columnHeaders.Length; i++)
+                    {
+                        data[0, i] = columnHeaders[i];
+                    }
+
+                    // Данные
+                    for (int i = 0; i < completedOrders.Count; i++)
+                    {
+                        var order = completedOrders[i];
+                        data[i + 1, 0] = order.PrintDate.ToString("dd.MM.yyyy");
+                        //data[i + 1, 1] = $"{order.Surname} {order.Name} {order.Lastname}";
+                        data[i + 1, 1] = order.PaperCount.ToString();
+                        data[i + 1, 2] = order.TotalPrice.ToString("C2"); // Добавляем символ рубля
+                        data[i + 1, 3] = order.IsLocal ? "Локальный" : "Онлайн";
+                    }
+
+                    table.DataSource = data;
+
+                    // Добавление таблицы на страницу
+                    table.Draw(page, new PointF(50, y));
+
+                    // Сохранение PDF
+                    string reportPath = "report.pdf";
+                    pdf.SaveToFile(reportPath);
+
+                    // Открытие PDF
+                    System.Diagnostics.Process.Start(reportPath);
+                }
+                catch (HttpRequestException ex)
+                {
+                    MessageBox.Show($"Ошибка HTTP запроса: {ex.Message}\nURL: {CurrentURL}/completedorders?startDate={startDate:yyyy-MM-dd}&endDate={endDate:yyyy-MM-dd}");
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show($"Произошла ошибка: {ex.Message}");
+                }
+            }
+        }
+    }
+}
+///////////////////////////////////////////////
