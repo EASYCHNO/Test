@@ -668,23 +668,22 @@ app.put('/paperinventory', async (req, res) => {
 
 // Endpoint для получения заказов пользователя
 app.get('/client/orders', authenticateToken, (req, res) => {
-  const userID = req.user.userID;
+  const userId = req.user.userID;
 
   const sql = `
-    SELECT Orders.OrderID, Files.FileName, Orders.OrderDate, Orders.OrderPrice, Orders.StatusID
+    SELECT Orders.OrderID, Files.FileName, Orders.OrderDate, Orders.OrderPrice, OrderStatuses.StatusName
     FROM Orders
     JOIN OrderFiles ON Orders.OrderID = OrderFiles.OrderID
     JOIN Files ON OrderFiles.FileID = Files.FileID
     JOIN OrderStatuses ON Orders.StatusID = OrderStatuses.StatusID
-    WHERE Orders.UserID = ?;
+    WHERE Orders.UserID = ?
   `;
 
-  db.all(sql, [userID], (err, orders) => {
+  db.all(sql, [userId], (err, orders) => {
     if (err) {
       console.log('Ошибка при получении заказов пользователя:', err.message);
       return res.status(500).send('Ошибка при получении заказов');
     }
-
     res.status(200).json(orders);
   });
 });
