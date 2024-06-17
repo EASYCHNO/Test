@@ -7,6 +7,8 @@ const fs = require('fs');
 const path = require('path');
 const bodyParser = require('body-parser');
 const { transliterate } = require('transliteration');
+const { PDFDocument } = require('pdf-lib');
+const mammoth = require('mammoth');
 const app = express();
 const PORT = 3000;
 
@@ -40,64 +42,81 @@ const storage = multer.diskStorage({
 
 const uploads = multer({ storage: storage });
 
+async function getPageCount(filePath) {
+  const ext = path.extname(filePath).toLowerCase();
+  if (ext === '.pdf') {
+    const pdfBytes = fs.readFileSync(filePath);
+    const pdfDoc = await PDFDocument.load(pdfBytes);
+    return pdfDoc.getPageCount();
+  } else if (ext === '.docx') {
+    const result = await mammoth.extractRawText({ path: filePath });
+    const pages = result.value.split('\f').length;
+    return pages;
+  }
+  throw new Error('Unsupported file type');
+}
 
-app.post('/upload', authenticateToken, uploads.single('file'), (req, res) => {
+app.post('/upload', uploads.single('file'), async (req, res) => {
   const file = req.file;
-  const userId = req.user.userID;
+  const userId = req.user.userID; 
   const orderDate = new Date().toISOString().split('T')[0];
-  const pageCount = parseInt(req.body.pageCount, 10);
-  const orderPrice = pageCount * 5;
 
   if (!file) {
-      return res.status(400).send('Файл не загружен');
+    return res.status(400).send('Файл не загружен');
   }
 
-  // Декодирование и транслитерация имени файла
   const decodedFileName = decodeURIComponent(escape(file.originalname));
   const transliteratedFileName = transliterate(decodedFileName);
 
   const newPath = path.join('uploads', transliteratedFileName);
 
-  fs.rename(file.path, newPath, (err) => {
-      if (err) {
-          console.error('Ошибка при переименовании файла:', err.message);
-          return res.status(500).send('Ошибка при переименовании файла');
-      }
+  fs.rename(file.path, newPath, async (err) => {
+    if (err) {
+      console.error('Ошибка при переименовании файла:', err.message);
+      return res.status(500).send('Ошибка при переименовании файла');
+    }
 
-      // Формирование URL с транслитерированным именем файла
+    try {
+      const pageCount = await getPageCount(newPath);
+      const orderPrice = pageCount * 5;
+      
       const fileUrl = `http://test-bri6.onrender.com/uploads/${encodeURIComponent(transliteratedFileName)}`;
 
       db.serialize(() => {
-          db.run(`INSERT INTO Files (FileName, FilePath) VALUES (?, ?)`, [decodedFileName, fileUrl], function (err) {
+        db.run(`INSERT INTO Files (FileName, FilePath) VALUES (?, ?)`, [decodedFileName, fileUrl], function (err) {
+          if (err) {
+            console.error('Ошибка записи в таблицу Files:', err.message);
+            return res.status(500).send('Ошибка записи в таблицу Files');
+          }
+
+          const fileId = this.lastID;
+          console.log(`Файл записан в таблицу Files с ID: ${fileId}`);
+
+          db.run(`INSERT INTO Orders (UserID, OrderDate, StatusID, OrderPrice) VALUES (?, ?, ?, ?)`, [userId, orderDate, 1, orderPrice], function (err) {
+            if (err) {
+              console.error('Ошибка записи в таблицу Orders:', err.message);
+              return res.status(500).send('Ошибка записи в таблицу Orders');
+            }
+
+            const orderId = this.lastID;
+            console.log(`Заказ записан в таблицу Orders с ID: ${orderId}`);
+
+            db.run(`INSERT INTO OrderFiles (OrderID, FileID) VALUES (?, ?)`, [orderId, fileId], function (err) {
               if (err) {
-                  console.error('Ошибка записи в таблицу Files:', err.message);
-                  return res.status(500).send('Ошибка записи в таблицу Files');
+                console.error('Ошибка записи в таблицу OrderFiles:', err.message);
+                return res.status(500).send('Ошибка записи в таблицу OrderFiles');
               }
 
-              const fileId = this.lastID;
-              console.log(`Файл записан в таблицу Files с ID: ${fileId}`);
-
-              db.run(`INSERT INTO Orders (UserID, OrderDate, StatusID, OrderPrice) VALUES (?, ?, ?, ?)`, [userId, orderDate, 1, orderPrice], function (err) {
-                  if (err) {
-                      console.error('Ошибка записи в таблицу Orders:', err.message);
-                      return res.status(500).send('Ошибка записи в таблицу Orders');
-                  }
-
-                  const orderId = this.lastID;
-                  console.log(`Заказ записан в таблицу Orders с ID: ${orderId}`);
-
-                  db.run(`INSERT INTO OrderFiles (OrderID, FileID) VALUES (?, ?)`, [orderId, fileId], function (err) {
-                      if (err) {
-                          console.error('Ошибка записи в таблицу OrderFiles:', err.message);
-                          return res.status(500).send('Ошибка записи в таблицу OrderFiles');
-                      }
-
-                      console.log('Файл успешно загружен и заказ оформлен.');
-                      res.send('Файл успешно загружен и заказ оформлен.');
-                  });
-              });
+              console.log('Файл успешно загружен и заказ оформлен.');
+              res.send('Файл успешно загружен и заказ оформлен.');
+            });
           });
+        });
       });
+    } catch (error) {
+      console.error('Ошибка при вычислении количества страниц:', error.message);
+      res.status(500).send('Ошибка при вычислении количества страниц');
+    }
   });
 });
 
