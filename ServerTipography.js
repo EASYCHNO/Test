@@ -56,43 +56,51 @@ app.post('/upload', authenticateToken, uploads.single('file'), (req, res) => {
   const transliteratedFileName = transliterate(originalFileName);
   const newPath = path.join('uploads', transliteratedFileName);
 
-  // Переименование файла на сервере с транслитерированным именем
-  fs.rename(file.path, newPath, (err) => {
+  // Проверка наличия файла перед переименованием
+  fs.access(file.path, fs.constants.F_OK, (err) => {
     if (err) {
-      console.error('Ошибка при переименовании файла:', err.message);
-      return res.status(500).send('Ошибка при переименовании файла');
+      console.error('Файл не найден:', err.message);
+      return res.status(500).send('Файл не найден');
     }
 
-    // Формирование URL с транслитерированным именем файла
-    const fileUrl = `http://test-bri6.onrender.com/uploads/${encodeURIComponent(transliteratedFileName)}`;
+    // Переименование файла на сервере с транслитерированным именем
+    fs.rename(file.path, newPath, (err) => {
+      if (err) {
+        console.error('Ошибка при переименовании файла:', err.message);
+        return res.status(500).send('Ошибка при переименовании файла');
+      }
 
-    db.serialize(() => {
-      db.run(`INSERT INTO Files (FileName, FilePath) VALUES (?, ?)`, [originalFileName, fileUrl], function (err) {
-        if (err) {
-          console.error('Ошибка записи в таблицу Files:', err.message);
-          return res.status(500).send('Ошибка записи в таблицу Files');
-        }
+      // Формирование URL с транслитерированным именем файла
+      const fileUrl = `http://test-bri6.onrender.com/uploads/${encodeURIComponent(transliteratedFileName)}`;
 
-        const fileId = this.lastID;
-        console.log(`Файл записан в таблицу Files с ID: ${fileId}`);
-
-        db.run(`INSERT INTO Orders (UserID, OrderDate, StatusID, OrderPrice) VALUES (?, ?, ?, ?)`, [userId, orderDate, 1, 35], function (err) {
+      db.serialize(() => {
+        db.run(`INSERT INTO Files (FileName, FilePath) VALUES (?, ?)`, [originalFileName, fileUrl], function (err) {
           if (err) {
-            console.error('Ошибка записи в таблицу Orders:', err.message);
-            return res.status(500).send('Ошибка записи в таблицу Orders');
+            console.error('Ошибка записи в таблицу Files:', err.message);
+            return res.status(500).send('Ошибка записи в таблицу Files');
           }
 
-          const orderId = this.lastID;
-          console.log(`Заказ записан в таблицу Orders с ID: ${orderId}`);
+          const fileId = this.lastID;
+          console.log(`Файл записан в таблицу Files с ID: ${fileId}`);
 
-          db.run(`INSERT INTO OrderFiles (OrderID, FileID) VALUES (?, ?)`, [orderId, fileId], function (err) {
+          db.run(`INSERT INTO Orders (UserID, OrderDate, StatusID, OrderPrice) VALUES (?, ?, ?, ?)`, [userId, orderDate, 1, 35], function (err) {
             if (err) {
-              console.error('Ошибка записи в таблицу OrderFiles:', err.message);
-              return res.status(500).send('Ошибка записи в таблицу OrderFiles');
+              console.error('Ошибка записи в таблицу Orders:', err.message);
+              return res.status(500).send('Ошибка записи в таблицу Orders');
             }
 
-            console.log('Файл успешно загружен и заказ оформлен.');
-            res.send('Файл успешно загружен и заказ оформлен.');
+            const orderId = this.lastID;
+            console.log(`Заказ записан в таблицу Orders с ID: ${orderId}`);
+
+            db.run(`INSERT INTO OrderFiles (OrderID, FileID) VALUES (?, ?)`, [orderId, fileId], function (err) {
+              if (err) {
+                console.error('Ошибка записи в таблицу OrderFiles:', err.message);
+                return res.status(500).send('Ошибка записи в таблицу OrderFiles');
+              }
+
+              console.log('Файл успешно загружен и заказ оформлен.');
+              res.send('Файл успешно загружен и заказ оформлен.');
+            });
           });
         });
       });
