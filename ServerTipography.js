@@ -671,10 +671,11 @@ app.get('/client/orders', authenticateToken, (req, res) => {
   const userID = req.user.userID;
 
   const sql = `
-    SELECT Orders.OrderID, Files.FileName, Orders.OrderDate, Orders.OrderPrice 
+    SELECT Orders.OrderID, Files.FileName, Orders.OrderDate, Orders.OrderPrice, Orders.StatusID
     FROM Orders
     JOIN OrderFiles ON Orders.OrderID = OrderFiles.OrderID
     JOIN Files ON OrderFiles.FileID = Files.FileID
+    JOIN OrderStatuses ON Orders.StatusID = OrderStatuses.StatusID
     WHERE Orders.UserID = ?;
   `;
 
