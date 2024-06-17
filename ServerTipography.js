@@ -49,24 +49,18 @@ app.post('/upload', authenticateToken, uploads.single('file'), (req, res) => {
     return res.status(400).send('Файл не загружен');
   }
 
-  // Оригинальное имя файла
-  const originalFileName = file.originalname;
-  // Декодированное имя файла
-  const decodedFileName = decodeURIComponent(escape(originalFileName));
+  const decodedFileName = decodeURIComponent(escape(file.originalname)); // Декодирование имени файла
+
   const newPath = path.join('uploads', decodedFileName);
 
-  // Переименование файла на сервере с оригинальным именем
   fs.rename(file.path, newPath, (err) => {
     if (err) {
       console.error('Ошибка при переименовании файла:', err.message);
       return res.status(500).send('Ошибка при переименовании файла');
     }
 
-    // Формирование URL с кодированием имени файла
-    const fileUrl = `http://test-bri6.onrender.com/uploads/${encodeURIComponent(decodedFileName)}`;
-
     db.serialize(() => {
-      db.run(`INSERT INTO Files (FileName, FilePath) VALUES (?, ?)`, [originalFileName, fileUrl], function (err) {
+      db.run(`INSERT INTO Files (FileName, FilePath) VALUES (?, ?)`, [decodedFileName, newPath], function (err) {
         if (err) {
           console.error('Ошибка записи в таблицу Files:', err.message);
           return res.status(500).send('Ошибка записи в таблицу Files');
