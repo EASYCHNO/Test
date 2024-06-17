@@ -51,8 +51,10 @@ async function getPageCount(filePath) {
   } else if (ext === '.docx') {
     const result = await mammoth.extractRawText({ path: filePath });
     const text = result.value;
-    const pages = text.split('\n\n').length; // Оценка на основе разделения по параграфам
-    return pages;
+    // Уточняем количество страниц на основе количества символов и типичной длины страницы
+    const charsPerPage = 1500; // Средняя длина страницы
+    const pageCount = Math.ceil(text.length / charsPerPage);
+    return pageCount;
   }
   throw new Error('Unsupported file type');
 }
