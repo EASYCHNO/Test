@@ -9,6 +9,8 @@ const bodyParser = require('body-parser');
 const { transliterate } = require('transliteration');
 const { PDFDocument } = require('pdf-lib');
 const mammoth = require('mammoth');
+const { Document, Packer } = require('docx');
+const { exec } = require('child_process');
 const app = express();
 const PORT = 3000;
 
@@ -49,9 +51,19 @@ async function getPageCount(filePath) {
     const pdfDoc = await PDFDocument.load(pdfBytes);
     return pdfDoc.getPageCount();
   } else if (ext === '.docx') {
-    const result = await mammoth.extractRawText({ path: filePath });
-    const pages = result.value.split('\f').length;
-    return pages;
+    const pdfPath = filePath.replace('.docx', '.pdf');
+    await new Promise((resolve, reject) => {
+      exec(`libreoffice --headless --convert-to pdf ${filePath} --outdir ${path.dirname(filePath)}`, (error, stdout, stderr) => {
+        if (error) {
+          reject(error);
+        } else {
+          resolve();
+        }
+      });
+    });
+    const pdfBytes = fs.readFileSync(pdfPath);
+    const pdfDoc = await PDFDocument.load(pdfBytes);
+    return pdfDoc.getPageCount();
   }
   throw new Error('Unsupported file type');
 }
