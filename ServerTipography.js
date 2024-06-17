@@ -45,9 +45,11 @@ app.post('/upload', authenticateToken, uploads.single('file'), (req, res) => {
   const file = req.file;
   const userId = req.user.userID;
   const orderDate = new Date().toISOString().split('T')[0];
+  const pageCount = parseInt(req.body.pageCount, 10);
+  const orderPrice = pageCount * 5;
 
   if (!file) {
-    return res.status(400).send('Файл не загружен');
+      return res.status(400).send('Файл не загружен');
   }
 
   // Декодирование и транслитерация имени файла
@@ -57,45 +59,45 @@ app.post('/upload', authenticateToken, uploads.single('file'), (req, res) => {
   const newPath = path.join('uploads', transliteratedFileName);
 
   fs.rename(file.path, newPath, (err) => {
-    if (err) {
-      console.error('Ошибка при переименовании файла:', err.message);
-      return res.status(500).send('Ошибка при переименовании файла');
-    }
+      if (err) {
+          console.error('Ошибка при переименовании файла:', err.message);
+          return res.status(500).send('Ошибка при переименовании файла');
+      }
 
-    // Формирование URL с транслитерированным именем файла
-    const fileUrl = `http://test-bri6.onrender.com/uploads/${encodeURIComponent(transliteratedFileName)}`;
+      // Формирование URL с транслитерированным именем файла
+      const fileUrl = `http://test-bri6.onrender.com/uploads/${encodeURIComponent(transliteratedFileName)}`;
 
-    db.serialize(() => {
-      db.run(`INSERT INTO Files (FileName, FilePath) VALUES (?, ?)`, [decodedFileName, fileUrl], function (err) {
-        if (err) {
-          console.error('Ошибка записи в таблицу Files:', err.message);
-          return res.status(500).send('Ошибка записи в таблицу Files');
-        }
+      db.serialize(() => {
+          db.run(`INSERT INTO Files (FileName, FilePath) VALUES (?, ?)`, [decodedFileName, fileUrl], function (err) {
+              if (err) {
+                  console.error('Ошибка записи в таблицу Files:', err.message);
+                  return res.status(500).send('Ошибка записи в таблицу Files');
+              }
 
-        const fileId = this.lastID;
-        console.log(`Файл записан в таблицу Files с ID: ${fileId}`);
+              const fileId = this.lastID;
+              console.log(`Файл записан в таблицу Files с ID: ${fileId}`);
 
-        db.run(`INSERT INTO Orders (UserID, OrderDate, StatusID, OrderPrice) VALUES (?, ?, ?, ?)`, [userId, orderDate, 1, 35], function (err) {
-          if (err) {
-            console.error('Ошибка записи в таблицу Orders:', err.message);
-            return res.status(500).send('Ошибка записи в таблицу Orders');
-          }
+              db.run(`INSERT INTO Orders (UserID, OrderDate, StatusID, OrderPrice) VALUES (?, ?, ?, ?)`, [userId, orderDate, 1, orderPrice], function (err) {
+                  if (err) {
+                      console.error('Ошибка записи в таблицу Orders:', err.message);
+                      return res.status(500).send('Ошибка записи в таблицу Orders');
+                  }
 
-          const orderId = this.lastID;
-          console.log(`Заказ записан в таблицу Orders с ID: ${orderId}`);
+                  const orderId = this.lastID;
+                  console.log(`Заказ записан в таблицу Orders с ID: ${orderId}`);
 
-          db.run(`INSERT INTO OrderFiles (OrderID, FileID) VALUES (?, ?)`, [orderId, fileId], function (err) {
-            if (err) {
-              console.error('Ошибка записи в таблицу OrderFiles:', err.message);
-              return res.status(500).send('Ошибка записи в таблицу OrderFiles');
-            }
+                  db.run(`INSERT INTO OrderFiles (OrderID, FileID) VALUES (?, ?)`, [orderId, fileId], function (err) {
+                      if (err) {
+                          console.error('Ошибка записи в таблицу OrderFiles:', err.message);
+                          return res.status(500).send('Ошибка записи в таблицу OrderFiles');
+                      }
 
-            console.log('Файл успешно загружен и заказ оформлен.');
-            res.send('Файл успешно загружен и заказ оформлен.');
+                      console.log('Файл успешно загружен и заказ оформлен.');
+                      res.send('Файл успешно загружен и заказ оформлен.');
+                  });
+              });
           });
-        });
       });
-    });
   });
 });
 
