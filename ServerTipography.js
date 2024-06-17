@@ -6,6 +6,7 @@ const multer = require('multer');
 const fs = require('fs');
 const path = require('path');
 const bodyParser = require('body-parser');
+const { transliterate } = require('transliteration');
 const app = express();
 const PORT = 3000;
 
@@ -49,18 +50,24 @@ app.post('/upload', authenticateToken, uploads.single('file'), (req, res) => {
     return res.status(400).send('Файл не загружен');
   }
 
-  const decodedFileName = decodeURIComponent(escape(file.originalname)); // Декодирование имени файла
+  // Оригинальное имя файла
+  const originalFileName = file.originalname;
+  // Транслитерированное имя файла
+  const transliteratedFileName = transliterate(originalFileName);
+  const newPath = path.join('uploads', transliteratedFileName);
 
-  const newPath = path.join('uploads', decodedFileName);
-
+  // Переименование файла на сервере с транслитерированным именем
   fs.rename(file.path, newPath, (err) => {
     if (err) {
       console.error('Ошибка при переименовании файла:', err.message);
       return res.status(500).send('Ошибка при переименовании файла');
     }
 
+    // Формирование URL с транслитерированным именем файла
+    const fileUrl = `http://test-bri6.onrender.com/uploads/${encodeURIComponent(transliteratedFileName)}`;
+
     db.serialize(() => {
-      db.run(`INSERT INTO Files (FileName, FilePath) VALUES (?, ?)`, [decodedFileName, newPath], function (err) {
+      db.run(`INSERT INTO Files (FileName, FilePath) VALUES (?, ?)`, [originalFileName, fileUrl], function (err) {
         if (err) {
           console.error('Ошибка записи в таблицу Files:', err.message);
           return res.status(500).send('Ошибка записи в таблицу Files');
