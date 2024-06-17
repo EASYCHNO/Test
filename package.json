@@ -7,6 +7,7 @@
     "docx2pdf": "^0.0.4",
     "express": "^4.19.2",
     "jsonwebtoken": "^9.0.2",
+    "libreoffice": "^0.4.5",
     "libreoffice-convert": "^1.5.1",
     "mammoth": "^1.8.0",
     "morgan": "^1.10.0",
@@ -14,5 +15,9 @@
     "pdf-lib": "^1.17.1",
     "sqlite3": "^5.1.7",
     "transliteration": "^2.3.5"
+  },
+  "scripts": {
+    "install-libreoffice": "sh ./install-libreoffice.sh",
+    "start": "node server.js"
   }
 }

@@ -51,13 +51,22 @@ async function getPageCount(filePath) {
     return pdfDoc.getPageCount();
   } else if (ext === '.docx') {
     const pdfPath = filePath.replace('.docx', '.pdf');
-    await docx2pdf(filePath, pdfPath);
+    await new Promise((resolve, reject) => {
+      exec(`libreoffice --headless --convert-to pdf "${filePath}" --outdir "${path.dirname(filePath)}"`, (error, stdout, stderr) => {
+        if (error) {
+          reject(error);
+        } else {
+          resolve();
+        }
+      });
+    });
     const pdfBytes = fs.readFileSync(pdfPath);
     const pdfDoc = await PDFDocument.load(pdfBytes);
     return pdfDoc.getPageCount();
   }
   throw new Error('Unsupported file type');
 }
+
 
 
 app.post('/upload', authenticateToken, uploads.single('file'), async (req, res) => {
