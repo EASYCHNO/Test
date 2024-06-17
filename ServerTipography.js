@@ -701,7 +701,7 @@ app.get('/client/orders', authenticateToken, (req, res) => {
     JOIN OrderFiles ON Orders.OrderID = OrderFiles.OrderID
     JOIN Files ON OrderFiles.FileID = Files.FileID
     JOIN OrderStatuses ON Orders.StatusID = OrderStatuses.StatusID
-    WHERE Orders.UserID = ?
+    WHERE Orders.UserID = ? AND Orders.StatusID = 1
   `;
 
   db.all(sql, [userId], (err, orders) => {
