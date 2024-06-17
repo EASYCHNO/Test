@@ -51,7 +51,7 @@ async function getPageCount(filePath) {
   } else if (ext === '.docx') {
     const result = await mammoth.convertToHtml({ path: filePath });
     const text = result.value;
-    const pageCount = Math.ceil(text.length / 1400); 
+    const pageCount = Math.ceil(text.length / 1800); 
     return pageCount;
   }
   throw new Error('Unsupported file type');
