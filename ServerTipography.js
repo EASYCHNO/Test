@@ -713,6 +713,34 @@ app.get('/client/orders', authenticateToken, (req, res) => {
   });
 });
 
+//Endpoint для получения данных пользователя
+app.get('/client/profile', (req, res) => {
+  const token = req.headers['authorization'];
+  if (!token) {
+    return res.status(401).send('Токен не предоставлен');
+  }
+
+  jwt.verify(token.split(' ')[1], SECRET_KEY, (err, decoded) => {
+    if (err) {
+      return res.status(401).send('Неверный токен');
+    }
+
+    const sql = `SELECT Name, Email FROM Users WHERE UserID = ?`;
+    db.get(sql, [decoded.userID], (err, user) => {
+      if (err) {
+        console.log('Ошибка при получении профиля пользователя:', err.message);
+        return res.status(500).send('Ошибка при получении профиля пользователя');
+      }
+
+      if (!user) {
+        return res.status(404).send('Пользователь не найден');
+      }
+
+      res.status(200).json(user);
+    });
+  });
+});
+
 // Запуск сервера
 app.listen(PORT, () => {
   console.log(`Сервер запущен на порту ${PORT}`);
