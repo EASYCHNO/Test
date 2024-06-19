@@ -747,7 +747,7 @@ app.get('/client/profile', (req, res) => {
       return res.status(401).send('Неверный токен');
     }
 
-    const sql = `SELECT Name, Email FROM Users WHERE UserID = ?`;
+    const sql = `SELECT Name, Surname, Email FROM Users WHERE UserID = ?`;
     db.get(sql, [decoded.userID], (err, user) => {
       if (err) {
         console.log('Ошибка при получении профиля пользователя:', err.message);
