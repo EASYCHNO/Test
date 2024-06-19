@@ -623,9 +623,6 @@ app.get('/localorders/latest', (req, res) => {
   });
 });
 
-
-
-
 // Маршрут для получения выборки выполненных заказов
 app.get('/completedorders', (req, res) => {
   const startDate = req.query.startDate;
