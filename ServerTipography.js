@@ -691,7 +691,7 @@ app.put('/paperinventory', async (req, res) => {
   }
 });
 
-// Endpoint для получения заказов пользователя
+// Endpoint для получения актульных заказов пользователя
 app.get('/client/orders', authenticateToken, (req, res) => {
   const userId = req.user.userID;
 
@@ -702,6 +702,28 @@ app.get('/client/orders', authenticateToken, (req, res) => {
     JOIN Files ON OrderFiles.FileID = Files.FileID
     JOIN OrderStatuses ON Orders.StatusID = OrderStatuses.StatusID
     WHERE Orders.UserID = ? AND Orders.StatusID = 1
+  `;
+
+  db.all(sql, [userId], (err, orders) => {
+    if (err) {
+      console.log('Ошибка при получении заказов пользователя:', err.message);
+      return res.status(500).send('Ошибка при получении заказов');
+    }
+    res.status(200).json(orders);
+  });
+});
+
+// Endpoint для получения выполненных заказов пользователя
+app.get('/client/completeorders', authenticateToken, (req, res) => {
+  const userId = req.user.userID;
+
+  const sql = `
+    SELECT Orders.OrderID, Files.FileName, Orders.OrderDate, Orders.OrderPrice, OrderStatuses.StatusName
+    FROM Orders
+    JOIN OrderFiles ON Orders.OrderID = OrderFiles.OrderID
+    JOIN Files ON OrderFiles.FileID = Files.FileID
+    JOIN OrderStatuses ON Orders.StatusID = OrderStatuses.StatusID
+    WHERE Orders.UserID = ? AND Orders.StatusID = 2
   `;
 
   db.all(sql, [userId], (err, orders) => {
