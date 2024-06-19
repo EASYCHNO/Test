@@ -196,18 +196,31 @@ app.post('/users/register', (req, res) => {
       return res.status(400).send('Необходимо заполнить все поля для регистрации');
   }
 
-  // Хэширование пароля с использованием bcrypt
-  const saltRounds = 10;
-  const hashedPassword = bcrypt.hashSync(password, saltRounds);
-
-  const sql = `INSERT INTO Users (Surname, Name, Lastname, Email, Login, Password, RoleID) 
-               VALUES (?, ?, ?, ?, ?, ?, ?)`;
-  db.run(sql, [surname, name, lastname, email, login, hashedPassword, roleID], function(err) {
+  const checkUserSql = 'SELECT COUNT(*) as count FROM Users WHERE Login = ?';
+  db.get(checkUserSql, [login], (err, row) => {
       if (err) {
-          console.log('Ошибка при регистрации пользователя:', err.message);
+          console.log('Ошибка при проверке логина:', err.message);
           return res.status(500).send('Ошибка при регистрации пользователя');
       }
-      res.status(200).send('Пользователь успешно зарегистрирован');
+
+      if (row.count > 0) {
+          console.log('Пользователь с таким логином уже существует');
+          return res.status(400).send('Пользователь с таким логином уже существует');
+      }
+
+      // Хэширование пароля с использованием bcrypt
+      const saltRounds = 10;
+      const hashedPassword = bcrypt.hashSync(password, saltRounds);
+
+      const insertUserSql = `INSERT INTO Users (Surname, Name, Lastname, Email, Login, Password, RoleID) 
+                             VALUES (?, ?, ?, ?, ?, ?, ?)`;
+      db.run(insertUserSql, [surname, name, lastname, email, login, hashedPassword, roleID], function(err) {
+          if (err) {
+              console.log('Ошибка при регистрации пользователя:', err.message);
+              return res.status(500).send('Ошибка при регистрации пользователя');
+          }
+          res.status(200).send('Пользователь успешно зарегистрирован');
+      });
   });
 });
 
