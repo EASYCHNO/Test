@@ -74,28 +74,17 @@ app.post('/upload', authenticateToken, uploads.single('file'), async (req, res) 
 
   const newPath = path.join('uploads', transliteratedFileName);
 
-  fs.rename(file.path, newPath, async (err) => {
+  fs.rename(file.path, newPath, async  (err) => {
       if (err) {
           console.error('Ошибка при переименовании файла:', err.message);
           return res.status(500).send('Ошибка при переименовании файла');
       }
 
-      try {
+      try{
         // Формирование URL с транслитерированным именем файла
         const fileUrl = `http://test-bri6.onrender.com/uploads/${encodeURIComponent(transliteratedFileName)}`;
-        
-        // Проверка типа файла и установка orderPrice
-        const ext = path.extname(newPath).toLowerCase();
-        let orderPrice;
-        if (ext === '.pdf' || ext === '.docx') {
-          const pageCount = await getPageCount(newPath);
-          orderPrice = pageCount * 5;
-        } else if (ext === '.jpg' || ext === '.jpeg' || ext === '.png') {
-          orderPrice = 5;
-        } else {
-          return res.status(400).send('Неподдерживаемый тип файла');
-        }
-
+        const pageCount = await getPageCount(newPath);
+        const orderPrice = pageCount * 5;
         db.serialize(() => {
           db.run(`INSERT INTO Files (FileName, FilePath) VALUES (?, ?)`, [decodedFileName, fileUrl], function (err) {
               if (err) {
@@ -127,9 +116,10 @@ app.post('/upload', authenticateToken, uploads.single('file'), async (req, res) 
               });
           });
       });
-      } catch (error) {
-        console.error('Ошибка при обработке файла:', error.message);
-        res.status(500).send('Ошибка при обработке файла');
+      }
+      catch(error) {
+        console.error('Ошибка при вычислении количества страниц:', error.message);
+        res.status(500).send('Ошибка при вычислении количества страниц');
       }
   });
 });
