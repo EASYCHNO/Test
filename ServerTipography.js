@@ -571,6 +571,19 @@ app.get('/localorders', (req, res) => {
   });
 });
 
+app.get('/onlineorders', (req, res) => {
+  const sql = 'SELECT * FROM Orders';
+  db.all(sql, [], (err, rows) => {
+    if (err) {
+      console.error('Ошибка получения локальных заказов:', err.message);
+      res.status(500).json({ error: 'Внутренняя ошибка сервера' });
+    } else {
+      res.json(rows);
+    }
+  });
+});
+
+
 // Маршрут для получения выборки выполненных заказов
 app.get('/completedordersall', (req, res) => {
   const startDate = req.query.startDate;
@@ -612,6 +625,7 @@ app.get('/localorders/latest', (req, res) => {
 
 
 
+
 // Маршрут для получения выборки выполненных заказов
 app.get('/completedorders', (req, res) => {
   const startDate = req.query.startDate;
@@ -629,6 +643,7 @@ app.get('/completedorders', (req, res) => {
         c.IsLocal
       FROM CompletedOrders c
       JOIN LocalOrders l ON c.LocalOrderID = l.LocalOrderID
+      JOIN Orders o ON c.OrderID = o.OrderID
       WHERE c.PrintDate BETWEEN ? AND ?
       `;
 
